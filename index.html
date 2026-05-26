@@ -1,0 +1,1063 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Colega App">
+<meta name="theme-color" content="#667eea">
+<title>Mi Asistente – Colega</title>
+
+<!-- PWA Manifest inline -->
+<script>
+const manifestData = {
+  name: "Asistente Personal – Colega",
+  short_name: "Colega App",
+  description: "Tu asistente personal de tareas, proyectos y recordatorios",
+  start_url: ".",
+  display: "standalone",
+  background_color: "#f5f6fa",
+  theme_color: "#667eea",
+  orientation: "portrait",
+  icons: [
+    { src: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23667eea'/><text y='.9em' font-size='80' x='10'>🤖</text></svg>", sizes: "192x192", type: "image/svg+xml" },
+    { src: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23667eea'/><text y='.9em' font-size='80' x='10'>🤖</text></svg>", sizes: "512x512", type: "image/svg+xml" }
+  ]
+};
+const blob = new Blob([JSON.stringify(manifestData)], {type: 'application/json'});
+const manifestURL = URL.createObjectURL(blob);
+document.write('<link rel="manifest" href="' + manifestURL + '">');
+</script>
+
+<style>
+:root {
+  --purple: #667eea;
+  --purple-dark: #5a6fd8;
+  --purple-light: #eef2ff;
+  --green: #10b981;
+  --red: #ef4444;
+  --amber: #f59e0b;
+  --gray: #6b7280;
+  --gray-light: #f3f4f6;
+  --white: #ffffff;
+  --shadow: 0 2px 12px rgba(102,126,234,0.12);
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #f0f2ff;
+  color: #1a1a2e;
+  min-height: 100vh;
+  padding-bottom: 80px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── TOP BAR ── */
+.topbar {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  padding: env(safe-area-inset-top, 12px) 16px 16px;
+  padding-top: max(env(safe-area-inset-top), 12px);
+  color: white;
+  position: sticky; top: 0; z-index: 100;
+}
+.topbar-inner { display: flex; justify-content: space-between; align-items: flex-start; }
+.topbar h1 { font-size: 18px; font-weight: 700; }
+.topbar .sub { font-size: 12px; opacity: 0.8; margin-top: 2px; }
+.topbar .time-chip {
+  background: rgba(255,255,255,0.2);
+  border-radius: 20px;
+  padding: 5px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+}
+.topbar .time-chip small { display: block; font-size: 10px; font-weight: 400; opacity: 0.85; }
+
+/* ── PROGRESS BANNER ── */
+.progress-banner {
+  background: white;
+  margin: 12px 12px 0;
+  border-radius: 14px;
+  padding: 14px 16px;
+  box-shadow: var(--shadow);
+  display: flex; align-items: center; gap: 14px;
+}
+.progress-ring-wrap { position: relative; width: 56px; height: 56px; flex-shrink: 0; }
+.progress-ring-wrap canvas { width: 56px; height: 56px; }
+.ring-label {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 800; color: var(--purple);
+}
+.progress-text h3 { font-size: 15px; font-weight: 700; }
+.progress-text p  { font-size: 12px; color: var(--gray); margin-top: 2px; }
+.streak-chip {
+  margin-left: auto;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #ea580c;
+  border-radius: 20px;
+  padding: 4px 10px;
+  font-size: 12px; font-weight: 700;
+  flex-shrink: 0;
+}
+
+/* ── BOTTOM NAV ── */
+.bottom-nav {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: white;
+  border-top: 1px solid #e5e7eb;
+  display: flex;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+  z-index: 100;
+  box-shadow: 0 -4px 16px rgba(0,0,0,0.06);
+}
+.nav-btn {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 10px 4px 8px;
+  border: none; background: none; cursor: pointer;
+  font-size: 10px; color: var(--gray);
+  transition: color 0.2s;
+  gap: 3px;
+}
+.nav-btn .nav-icon { font-size: 22px; line-height: 1; }
+.nav-btn.active { color: var(--purple); }
+.nav-btn.active .nav-icon { transform: scale(1.1); }
+
+/* ── PAGES ── */
+.page { display: none; padding: 12px; }
+.page.active { display: block; }
+
+/* ── SECTION HEADER ── */
+.section-head {
+  display: flex; align-items: center; gap: 8px;
+  margin: 16px 0 10px;
+}
+.section-head h2 { font-size: 15px; font-weight: 700; }
+.section-head .count {
+  background: var(--purple-light); color: var(--purple);
+  border-radius: 20px; padding: 2px 9px;
+  font-size: 11px; font-weight: 700;
+  margin-left: auto;
+}
+
+/* ── TASK CARDS ── */
+.task-card {
+  background: white;
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 8px;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.06);
+  display: flex; align-items: center; gap: 14px;
+  border: 1.5px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s;
+  -webkit-user-select: none; user-select: none;
+}
+.task-card:active { transform: scale(0.98); }
+.task-card.done {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  opacity: 0.75;
+}
+.task-card.urgent { border-color: #fca5a5; }
+
+.check-btn {
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  border: 2.5px solid #d1d5db;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.25s;
+  font-size: 14px;
+  color: white;
+}
+.task-card.done .check-btn {
+  background: var(--green); border-color: var(--green);
+}
+.task-content { flex: 1; min-width: 0; }
+.task-title {
+  font-size: 14px; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.task-card.done .task-title { text-decoration: line-through; color: var(--gray); }
+.task-meta { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+.tag {
+  font-size: 10px; font-weight: 700;
+  padding: 2px 8px; border-radius: 20px;
+}
+.tag-red    { background: #fee2e2; color: #dc2626; }
+.tag-amber  { background: #fef3c7; color: #d97706; }
+.tag-blue   { background: #dbeafe; color: #1d4ed8; }
+.tag-green  { background: #d1fae5; color: #065f46; }
+.tag-purple { background: var(--purple-light); color: var(--purple); }
+
+/* ── ADD TASK ── */
+.add-task-bar {
+  background: white;
+  border-radius: 14px;
+  padding: 12px 14px;
+  display: flex; gap: 10px;
+  box-shadow: var(--shadow);
+  margin-bottom: 12px;
+  border: 1.5px dashed #d1d5db;
+}
+.add-task-bar input {
+  flex: 1; border: none; outline: none;
+  font-size: 14px; background: transparent;
+  color: #1a1a2e;
+}
+.add-task-bar input::placeholder { color: #9ca3af; }
+.add-btn {
+  width: 34px; height: 34px;
+  background: var(--purple); color: white;
+  border: none; border-radius: 10px;
+  font-size: 20px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+.add-btn:active { background: var(--purple-dark); }
+
+/* ── PROJECT CARDS ── */
+.project-card {
+  background: white;
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 8px;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.06);
+}
+.project-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.project-name { font-size: 14px; font-weight: 700; }
+.deadline-pill {
+  font-size: 11px; font-weight: 700;
+  padding: 3px 10px; border-radius: 20px;
+  white-space: nowrap; flex-shrink: 0;
+}
+.deadline-urgent { background: #fee2e2; color: #dc2626; }
+.deadline-near   { background: #fef3c7; color: #d97706; }
+.deadline-ok     { background: #d1fae5; color: #065f46; }
+
+.project-bar-wrap { margin-top: 10px; }
+.project-bar {
+  height: 6px; background: #e5e7eb;
+  border-radius: 99px; overflow: hidden;
+  margin-top: 5px;
+}
+.project-bar-fill {
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--purple), #764ba2);
+  transition: width 0.5s ease;
+}
+.project-footer {
+  display: flex; justify-content: space-between;
+  margin-top: 8px; font-size: 11px; color: var(--gray);
+}
+
+/* ── MEETING CARDS ── */
+.meeting-card {
+  background: white;
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 8px;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.06);
+  border-left: 4px solid var(--purple);
+  display: flex; gap: 14px; align-items: flex-start;
+}
+.meeting-time-block {
+  text-align: center; min-width: 48px;
+}
+.meeting-hour { font-size: 18px; font-weight: 800; color: var(--purple); line-height: 1; }
+.meeting-ampm { font-size: 10px; color: var(--gray); }
+.meeting-title { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+.meeting-prep  { font-size: 12px; color: var(--gray); }
+
+.no-meeting-box {
+  text-align: center; padding: 32px 16px;
+  background: white; border-radius: 14px;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.05);
+}
+.no-meeting-box .emoji { font-size: 40px; display: block; margin-bottom: 10px; }
+.no-meeting-box p { color: var(--gray); font-size: 13px; line-height: 1.6; }
+
+/* ── ADD MEETING FORM ── */
+.add-meeting-form {
+  background: white; border-radius: 14px;
+  padding: 14px 16px;
+  box-shadow: var(--shadow);
+  margin-bottom: 12px;
+}
+.add-meeting-form h3 { font-size: 13px; font-weight: 700; margin-bottom: 10px; color: var(--purple); }
+.form-row { display: flex; gap: 8px; margin-bottom: 8px; }
+.form-row input, .form-row select {
+  flex: 1; border: 1px solid #e5e7eb; border-radius: 10px;
+  padding: 10px 12px; font-size: 13px; outline: none;
+  background: #f9fafb;
+  transition: border-color 0.2s;
+}
+.form-row input:focus, .form-row select:focus { border-color: var(--purple); background: white; }
+.form-submit {
+  width: 100%; background: var(--purple); color: white;
+  border: none; border-radius: 10px; padding: 12px;
+  font-size: 14px; font-weight: 700; cursor: pointer;
+}
+.form-submit:active { background: var(--purple-dark); }
+
+/* ── REMINDER PAGE ── */
+.reminder-banner {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  border-radius: 14px;
+  padding: 16px;
+  color: white;
+  margin-bottom: 12px;
+  text-align: center;
+}
+.reminder-banner .big { font-size: 36px; display: block; margin-bottom: 6px; }
+.reminder-banner h2 { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+.reminder-banner p { font-size: 12px; opacity: 0.85; }
+
+.reminder-item {
+  background: white; border-radius: 12px;
+  padding: 12px 16px; margin-bottom: 8px;
+  display: flex; align-items: center; gap: 12px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+}
+.reminder-icon { font-size: 24px; flex-shrink: 0; }
+.reminder-text h4 { font-size: 13px; font-weight: 700; }
+.reminder-text p  { font-size: 12px; color: var(--gray); margin-top: 2px; line-height: 1.5; }
+.reminder-time {
+  margin-left: auto; font-size: 11px; font-weight: 700;
+  color: var(--purple); flex-shrink: 0;
+}
+
+/* ── INSTALL PROMPT ── */
+.install-banner {
+  background: linear-gradient(135deg, #f0fdf4, #d1fae5);
+  border: 1.5px solid #6ee7b7;
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  display: flex; gap: 12px; align-items: center;
+}
+.install-banner .icon { font-size: 28px; flex-shrink: 0; }
+.install-text h3 { font-size: 13px; font-weight: 700; color: #065f46; }
+.install-text p  { font-size: 11px; color: #047857; margin-top: 2px; line-height: 1.5; }
+.install-btn {
+  margin-left: auto;
+  background: var(--green); color: white;
+  border: none; border-radius: 10px;
+  padding: 8px 14px; font-size: 12px; font-weight: 700;
+  cursor: pointer; flex-shrink: 0;
+}
+
+/* ── PROFILE / SETTINGS ── */
+.profile-header {
+  background: white; border-radius: 14px;
+  padding: 20px 16px; margin-bottom: 12px;
+  text-align: center; box-shadow: var(--shadow);
+}
+.avatar {
+  width: 72px; height: 72px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--purple), #764ba2);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 32px; margin: 0 auto 12px;
+}
+.profile-header h2 { font-size: 18px; font-weight: 800; }
+.profile-header p  { font-size: 13px; color: var(--gray); margin-top: 4px; }
+.level-bar-wrap { margin-top: 12px; }
+.level-bar-wrap .lbl { display: flex; justify-content: space-between; font-size: 11px; color: var(--gray); margin-bottom: 4px; }
+.level-bar { height: 8px; background: #e5e7eb; border-radius: 99px; overflow: hidden; }
+.level-fill { height: 100%; background: linear-gradient(90deg, var(--purple), #764ba2); width: 15%; transition: width 1s ease; }
+
+.stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+.stat-card {
+  background: white; border-radius: 12px;
+  padding: 14px 12px; text-align: center;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+}
+.stat-card .big-num { font-size: 28px; font-weight: 800; color: var(--purple); }
+.stat-card .lbl     { font-size: 11px; color: var(--gray); margin-top: 3px; }
+
+.settings-list { background: white; border-radius: 14px; overflow: hidden; box-shadow: var(--shadow); }
+.settings-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 16px; border-bottom: 1px solid #f3f4f6;
+  cursor: pointer;
+}
+.settings-item:last-child { border-bottom: none; }
+.settings-item .s-icon { font-size: 22px; flex-shrink: 0; }
+.settings-item .s-label { font-size: 14px; font-weight: 600; }
+.settings-item .s-desc  { font-size: 11px; color: var(--gray); margin-top: 2px; }
+.settings-item .chevron { margin-left: auto; color: var(--gray); font-size: 18px; }
+
+/* Toggle switch */
+.toggle { position: relative; display: inline-block; width: 44px; height: 24px; margin-left: auto; }
+.toggle input { opacity: 0; width: 0; height: 0; }
+.slider {
+  position: absolute; cursor: pointer; inset: 0;
+  background: #d1d5db; border-radius: 24px;
+  transition: .3s;
+}
+.slider:before {
+  content: ""; position: absolute;
+  height: 18px; width: 18px;
+  left: 3px; bottom: 3px;
+  background: white; border-radius: 50%;
+  transition: .3s;
+}
+input:checked + .slider { background: var(--purple); }
+input:checked + .slider:before { transform: translateX(20px); }
+
+/* ── MODAL ── */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 200;
+  display: none; align-items: flex-end;
+  padding: 0;
+}
+.modal-overlay.open { display: flex; }
+.modal-sheet {
+  background: white;
+  border-radius: 20px 20px 0 0;
+  width: 100%; padding: 20px 20px 32px;
+  max-height: 80vh; overflow-y: auto;
+}
+.modal-handle {
+  width: 40px; height: 4px;
+  background: #d1d5db; border-radius: 99px;
+  margin: 0 auto 16px;
+}
+.modal-title { font-size: 16px; font-weight: 800; margin-bottom: 16px; }
+.modal-close {
+  position: absolute; right: 20px; top: 20px;
+  font-size: 22px; cursor: pointer; color: var(--gray);
+  background: none; border: none;
+}
+
+/* ── INSTALL GUIDE ── */
+.install-step {
+  display: flex; gap: 12px; align-items: flex-start;
+  padding: 10px 0;
+  border-bottom: 1px solid #f3f4f6;
+}
+.install-step:last-child { border-bottom: none; }
+.step-num {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--purple); color: white;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 800; flex-shrink: 0;
+}
+.step-text h4 { font-size: 13px; font-weight: 700; }
+.step-text p  { font-size: 12px; color: var(--gray); margin-top: 3px; line-height: 1.5; }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="topbar-inner">
+    <div>
+      <h1 id="top-greeting">¡Hola, Colega! 👋</h1>
+      <div class="sub" id="top-date">Cargando fecha...</div>
+    </div>
+    <div class="time-chip">
+      <strong id="live-time">--:--</strong>
+      <small id="live-ampm">--</small>
+    </div>
+  </div>
+</div>
+
+<!-- PROGRESS BANNER -->
+<div class="progress-banner" style="margin:12px 12px 0;">
+  <div class="progress-ring-wrap">
+    <canvas id="ring-canvas" width="56" height="56"></canvas>
+    <div class="ring-label" id="ring-pct">0%</div>
+  </div>
+  <div class="progress-text">
+    <h3 id="prog-title">Empezando el día</h3>
+    <p id="prog-sub">Completa tus tareas de hoy</p>
+  </div>
+  <div class="streak-chip" id="streak-chip">🔥 0 días</div>
+</div>
+
+<!-- INSTALL BANNER -->
+<div class="install-banner" id="install-banner" style="margin:10px 12px 0; display:none;">
+  <div class="icon">📲</div>
+  <div class="install-text">
+    <h3>¡Instala la app!</h3>
+    <p>Agrégala a tu pantalla de inicio para acceso rápido desde el teléfono.</p>
+  </div>
+  <button class="install-btn" id="install-btn" onclick="installPWA()">Instalar</button>
+</div>
+
+<!-- ══════════════ PAGES ══════════════ -->
+
+<!-- PAGE: TAREAS -->
+<div class="page active" id="page-tasks">
+  <div class="section-head" style="margin-top:14px;">
+    <h2>✅ Tareas de Hoy</h2>
+    <span class="count" id="tasks-count">0/0</span>
+  </div>
+
+  <div class="add-task-bar">
+    <input type="text" id="new-task-input" placeholder="Nueva tarea..." maxlength="80">
+    <button class="add-btn" onclick="addTask()">+</button>
+  </div>
+
+  <div id="tasks-list"></div>
+</div>
+
+<!-- PAGE: PROYECTOS -->
+<div class="page" id="page-projects">
+  <div class="section-head" style="margin-top:14px;">
+    <h2>🚀 Proyectos</h2>
+    <span class="count" id="proj-count">0 activos</span>
+  </div>
+  <div id="projects-list"></div>
+</div>
+
+<!-- PAGE: AGENDA -->
+<div class="page" id="page-agenda">
+  <div class="section-head" style="margin-top:14px;">
+    <h2>📅 Agenda de Hoy</h2>
+  </div>
+
+  <div class="add-meeting-form">
+    <h3>+ Agregar compromiso</h3>
+    <div class="form-row">
+      <input type="time" id="meeting-time" placeholder="Hora">
+      <input type="text" id="meeting-title" placeholder="Descripción del compromiso" maxlength="60">
+    </div>
+    <div class="form-row">
+      <input type="text" id="meeting-prep" placeholder="Preparación necesaria (opcional)" maxlength="80">
+    </div>
+    <button class="form-submit" onclick="addMeeting()">Agregar a la agenda</button>
+  </div>
+
+  <div id="meetings-list"></div>
+</div>
+
+<!-- PAGE: RECORDATORIOS -->
+<div class="page" id="page-reminders">
+  <div class="reminder-banner">
+    <span class="big">⏰</span>
+    <h2>Centro de Recordatorios</h2>
+    <p>Activos de 8:00 AM a 8:00 PM · Solo tareas pendientes</p>
+  </div>
+
+  <div class="section-head">
+    <h2>🔔 Pendientes activos</h2>
+  </div>
+  <div id="reminders-list"></div>
+
+  <div class="section-head">
+    <h2>📱 Instalar en tu teléfono</h2>
+  </div>
+  <div id="install-guide"></div>
+</div>
+
+<!-- PAGE: PERFIL -->
+<div class="page" id="page-profile">
+  <div class="profile-header">
+    <div class="avatar">🤖</div>
+    <h2>Colega</h2>
+    <p>Desarrollador en crecimiento 🌱</p>
+    <div class="level-bar-wrap">
+      <div class="lbl"><span>Nivel: Principiante</span><span id="xp-label">15 / 100 XP</span></div>
+      <div class="level-bar"><div class="level-fill" id="level-fill"></div></div>
+    </div>
+  </div>
+
+  <div class="stat-grid">
+    <div class="stat-card"><div class="big-num" id="stat-today">0</div><div class="lbl">✅ Hoy completadas</div></div>
+    <div class="stat-card"><div class="big-num" id="stat-streak">0</div><div class="lbl">🔥 Días seguidos</div></div>
+    <div class="stat-card"><div class="big-num" id="stat-total">3</div><div class="lbl">🚀 Proyectos activos</div></div>
+    <div class="stat-card"><div class="big-num" id="stat-pending">0</div><div class="lbl">⏳ Tareas pendientes</div></div>
+  </div>
+
+  <div class="settings-list">
+    <div class="settings-item" onclick="showInstallGuide()">
+      <span class="s-icon">📲</span>
+      <div><div class="s-label">Instalar en teléfono</div><div class="s-desc">Agregar a pantalla de inicio</div></div>
+      <span class="chevron">›</span>
+    </div>
+    <div class="settings-item">
+      <span class="s-icon">🔔</span>
+      <div><div class="s-label">Recordatorios horarios</div><div class="s-desc">8:00 AM – 8:00 PM activos</div></div>
+      <label class="toggle"><input type="checkbox" id="toggle-reminders" checked onchange="toggleReminders(this)"><span class="slider"></span></label>
+    </div>
+    <div class="settings-item" onclick="clearTodayTasks()">
+      <span class="s-icon">🔄</span>
+      <div><div class="s-label">Reiniciar checklist de hoy</div><div class="s-desc">Marca todas como pendientes</div></div>
+      <span class="chevron">›</span>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ BOTTOM NAV ══════════ -->
+<nav class="bottom-nav">
+  <button class="nav-btn active" onclick="goTo('tasks', this)">
+    <span class="nav-icon">✅</span>Tareas
+  </button>
+  <button class="nav-btn" onclick="goTo('projects', this)">
+    <span class="nav-icon">🚀</span>Proyectos
+  </button>
+  <button class="nav-btn" onclick="goTo('agenda', this)">
+    <span class="nav-icon">📅</span>Agenda
+  </button>
+  <button class="nav-btn" onclick="goTo('reminders', this)">
+    <span class="nav-icon">⏰</span>Alertas
+  </button>
+  <button class="nav-btn" onclick="goTo('profile', this)">
+    <span class="nav-icon">👤</span>Perfil
+  </button>
+</nav>
+
+<!-- ══════════ MODAL ══════════ -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeModal()">
+  <div class="modal-sheet" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div class="modal-title" id="modal-title">Instalar app en tu teléfono</div>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════
+//  DATA & STORAGE
+// ══════════════════════════════════
+const K = {
+  tasks:    'capp_tasks',
+  done:     'capp_done_',
+  meetings: 'capp_meetings_',
+  streak:   'capp_streak',
+  lastDay:  'capp_lastday',
+  remind:   'capp_remind_on'
+};
+
+const DEFAULT_TASKS = [
+  { id:'t1', text:'Revisar correos y mensajes pendientes', priority:'alta' },
+  { id:'t2', text:'Actualizar estado de proyectos activos', priority:'alta' },
+  { id:'t3', text:'20 min de aprendizaje IA / programación', priority:'media' },
+  { id:'t4', text:'Revisar deadlines de esta semana', priority:'media' },
+  { id:'t5', text:'Anotar bloqueos o problemas del día', priority:'baja' },
+];
+
+const PROJECTS = [
+  { id:'p1', name:'Sistema Asistente Personal', deadline:'2026-05-30', progress:40 },
+  { id:'p2', name:'Aprendizaje IA – Anthropic',  deadline:'2026-06-30', progress:10 },
+  { id:'p3', name:'Python básico – freeCodeCamp', deadline:'2026-07-31', progress:5  },
+];
+
+function todayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+function getTasks()    { return JSON.parse(localStorage.getItem(K.tasks) || 'null') || [...DEFAULT_TASKS]; }
+function saveTasks(t)  { localStorage.setItem(K.tasks, JSON.stringify(t)); }
+function getDone()     { return JSON.parse(localStorage.getItem(K.done + todayKey()) || '[]'); }
+function saveDone(d)   { localStorage.setItem(K.done + todayKey(), JSON.stringify(d)); }
+function getMeetings() { return JSON.parse(localStorage.getItem(K.meetings + todayKey()) || '[]'); }
+function saveMeetings(m){ localStorage.setItem(K.meetings + todayKey(), JSON.stringify(m)); }
+function getStreak()   { return parseInt(localStorage.getItem(K.streak) || '0'); }
+function isRemindOn()  { return localStorage.getItem(K.remind) !== 'false'; }
+
+// ══════════════════════════════════
+//  STREAK LOGIC
+// ══════════════════════════════════
+function updateStreak() {
+  const lastDay = localStorage.getItem(K.lastDay);
+  const today   = todayKey();
+  const tasks   = getTasks(); const done = getDone();
+  const allDone = tasks.length > 0 && tasks.every(t => done.includes(t.id));
+  if (allDone && lastDay !== today) {
+    const s = getStreak() + 1;
+    localStorage.setItem(K.streak, s);
+    localStorage.setItem(K.lastDay, today);
+  }
+}
+
+// ══════════════════════════════════
+//  CLOCK & DATE
+// ══════════════════════════════════
+function padZ(n) { return String(n).padStart(2,'0'); }
+function updateClock() {
+  const now = new Date();
+  const h   = now.getHours(), m = now.getMinutes();
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const h12  = h % 12 || 12;
+  document.getElementById('live-time').textContent = `${padZ(h12)}:${padZ(m)}`;
+  document.getElementById('live-ampm').textContent = ampm;
+}
+function setupDate() {
+  const now   = new Date();
+  const days  = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+  const months= ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  const h     = now.getHours();
+  const g     = h<12 ? '¡Buenos días, Colega! 🌤️' : h<19 ? '¡Buenas tardes, Colega! ☀️' : '¡Buenas noches! 🌙';
+  document.getElementById('top-greeting').textContent = g;
+  document.getElementById('top-date').textContent = `${days[now.getDay()]} ${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`;
+  updateClock();
+  setInterval(updateClock, 30000);
+}
+
+// ══════════════════════════════════
+//  RING CHART
+// ══════════════════════════════════
+function drawRing(pct) {
+  const c   = document.getElementById('ring-canvas');
+  const ctx = c.getContext('2d');
+  const r   = 24, cx = 28, cy = 28;
+  ctx.clearRect(0,0,56,56);
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2);
+  ctx.strokeStyle='#e5e7eb'; ctx.lineWidth=5; ctx.stroke();
+  const end = -Math.PI/2 + (pct/100)*Math.PI*2;
+  ctx.beginPath(); ctx.arc(cx,cy,r,-Math.PI/2,end);
+  const grad = ctx.createLinearGradient(0,0,56,0);
+  grad.addColorStop(0,'#667eea'); grad.addColorStop(1,'#764ba2');
+  ctx.strokeStyle=grad; ctx.lineWidth=5;
+  ctx.lineCap='round'; ctx.stroke();
+}
+
+function updateProgress() {
+  const tasks = getTasks(); const done = getDone();
+  const total = tasks.length;
+  const doneN = tasks.filter(t => done.includes(t.id)).length;
+  const pct   = total ? Math.round(doneN/total*100) : 0;
+  drawRing(pct);
+  document.getElementById('ring-pct').textContent   = pct+'%';
+  document.getElementById('tasks-count').textContent = `${doneN}/${total}`;
+  document.getElementById('stat-today').textContent  = doneN;
+  document.getElementById('stat-pending').textContent= total - doneN;
+  const streak = getStreak();
+  document.getElementById('streak-chip').textContent  = `🔥 ${streak} días`;
+  document.getElementById('stat-streak').textContent  = streak;
+  const msgs = ['¡Empecemos!','¡Buen inicio!','¡Vas bien!','¡Más de la mitad!','¡Casi listo!','¡Completado! 🎉'];
+  const idx   = Math.min(Math.floor(pct/20), 5);
+  document.getElementById('prog-title').textContent = msgs[idx];
+  document.getElementById('prog-sub').textContent   = pct===100 ? '¡Todas las tareas de hoy completadas!' : `${total-doneN} tarea(s) pendiente(s)`;
+  if(pct===100) updateStreak();
+}
+
+// ══════════════════════════════════
+//  TASKS
+// ══════════════════════════════════
+function renderTasks() {
+  const tasks = getTasks(); const done = getDone();
+  const list  = document.getElementById('tasks-list');
+  list.innerHTML = '';
+  tasks.forEach(t => {
+    const isDone = done.includes(t.id);
+    const pCls   = t.priority==='alta' ? 'tag-red' : t.priority==='media' ? 'tag-amber' : 'tag-blue';
+    const pLbl   = t.priority==='alta' ? '🔴 Alta' : t.priority==='media' ? '🟡 Media' : '🔵 Baja';
+    const div    = document.createElement('div');
+    div.className= 'task-card' + (isDone?' done':'') + (t.priority==='alta'&&!isDone?' urgent':'');
+    div.onclick  = () => toggleTask(t.id);
+    div.innerHTML= `
+      <div class="check-btn">${isDone?'✓':''}</div>
+      <div class="task-content">
+        <div class="task-title">${t.text}</div>
+        <div class="task-meta"><span class="tag ${pCls}">${pLbl}</span></div>
+      </div>`;
+    list.appendChild(div);
+  });
+  updateProgress();
+}
+
+function toggleTask(id) {
+  const done = getDone(); const idx = done.indexOf(id);
+  if(idx===-1) done.push(id); else done.splice(idx,1);
+  saveDone(done); renderTasks();
+}
+
+function addTask() {
+  const input = document.getElementById('new-task-input');
+  const text  = input.value.trim(); if(!text) return;
+  const tasks = getTasks();
+  tasks.push({ id:'u'+Date.now(), text, priority:'media' });
+  saveTasks(tasks); input.value = ''; renderTasks();
+}
+
+document.getElementById('new-task-input').addEventListener('keydown', e => { if(e.key==='Enter') addTask(); });
+
+function clearTodayTasks() {
+  saveDone([]); renderTasks(); renderReminders();
+  if(confirm('¿Reiniciar todas las tareas de hoy como pendientes?')) { saveDone([]); renderTasks(); renderReminders(); }
+}
+
+// ══════════════════════════════════
+//  PROJECTS
+// ══════════════════════════════════
+function daysLeft(deadline) { return Math.ceil((new Date(deadline)-new Date())/86400000); }
+
+function renderProjects() {
+  const list = document.getElementById('projects-list');
+  list.innerHTML = '';
+  let active = 0;
+  PROJECTS.forEach(p => {
+    const d = daysLeft(p.deadline);
+    const dCls = d<=3 ? 'deadline-urgent' : d<=10 ? 'deadline-near' : 'deadline-ok';
+    const dLbl = d<=0 ? '🚨 VENCE HOY' : d===1 ? '⚠️ Mañana' : `📅 ${d} días`;
+    if(p.progress < 100) active++;
+    const div = document.createElement('div');
+    div.className = 'project-card';
+    div.innerHTML = `
+      <div class="project-top">
+        <div class="project-name">${p.name}</div>
+        <span class="deadline-pill ${dCls}">${dLbl}</span>
+      </div>
+      <div class="project-bar-wrap">
+        <div class="project-bar"><div class="project-bar-fill" style="width:${p.progress}%"></div></div>
+      </div>
+      <div class="project-footer">
+        <span>Progreso: ${p.progress}%</span>
+        <span>Límite: ${p.deadline}</span>
+      </div>`;
+    list.appendChild(div);
+  });
+  document.getElementById('proj-count').textContent = `${active} activos`;
+  document.getElementById('stat-total').textContent  = active;
+}
+
+// ══════════════════════════════════
+//  MEETINGS
+// ══════════════════════════════════
+function renderMeetings() {
+  const meetings = getMeetings();
+  const list     = document.getElementById('meetings-list');
+  list.innerHTML = '';
+  if(!meetings.length) {
+    list.innerHTML = `<div class="no-meeting-box"><span class="emoji">🎉</span><p>Sin compromisos por ahora.<br>Agrega uno usando el formulario de arriba.</p></div>`;
+    return;
+  }
+  meetings.sort((a,b) => a.time.localeCompare(b.time));
+  meetings.forEach((m,i) => {
+    const [hh,mm] = m.time.split(':');
+    const h = parseInt(hh), ampm = h>=12?'PM':'AM', h12 = h%12||12;
+    const div = document.createElement('div');
+    div.className = 'meeting-card';
+    div.innerHTML = `
+      <div class="meeting-time-block">
+        <div class="meeting-hour">${padZ(h12)}:${mm}</div>
+        <div class="meeting-ampm">${ampm}</div>
+      </div>
+      <div style="flex:1;">
+        <div class="meeting-title">${m.title}</div>
+        ${m.prep ? `<div class="meeting-prep">📝 ${m.prep}</div>` : ''}
+      </div>
+      <button onclick="deleteMeeting(${i})" style="background:none;border:none;font-size:20px;cursor:pointer;color:#9ca3af;padding:4px;">✕</button>`;
+    list.appendChild(div);
+  });
+}
+
+function addMeeting() {
+  const time  = document.getElementById('meeting-time').value;
+  const title = document.getElementById('meeting-title').value.trim();
+  const prep  = document.getElementById('meeting-prep').value.trim();
+  if(!time || !title) { alert('Ingresa la hora y descripción del compromiso.'); return; }
+  const meetings = getMeetings();
+  meetings.push({ time, title, prep });
+  saveMeetings(meetings);
+  document.getElementById('meeting-time').value  = '';
+  document.getElementById('meeting-title').value = '';
+  document.getElementById('meeting-prep').value  = '';
+  renderMeetings(); renderReminders();
+}
+
+function deleteMeeting(i) {
+  const m = getMeetings(); m.splice(i,1); saveMeetings(m); renderMeetings(); renderReminders();
+}
+
+// ══════════════════════════════════
+//  REMINDERS
+// ══════════════════════════════════
+function renderReminders() {
+  const list   = document.getElementById('reminders-list');
+  const tasks  = getTasks(); const done = getDone();
+  const pending = tasks.filter(t => !done.includes(t.id));
+  const meetings= getMeetings();
+  const now    = new Date();
+  list.innerHTML = '';
+
+  if(!isRemindOn()) {
+    list.innerHTML = `<div class="no-meeting-box"><span class="emoji">🔕</span><p>Los recordatorios están desactivados.<br>Actívalos desde el perfil.</p></div>`;
+    return;
+  }
+
+  if(!pending.length && !meetings.length) {
+    list.innerHTML = `<div class="no-meeting-box"><span class="emoji">🎉</span><p>¡Todo al día!<br>No hay recordatorios pendientes.</p></div>`;
+    return;
+  }
+
+  pending.slice(0,5).forEach(t => {
+    const pLbl = t.priority==='alta' ? '🔴' : t.priority==='media' ? '🟡' : '🔵';
+    const div  = document.createElement('div');
+    div.className = 'reminder-item';
+    div.innerHTML = `
+      <div class="reminder-icon">${pLbl}</div>
+      <div class="reminder-text"><h4>${t.text}</h4><p>Tarea pendiente de hoy</p></div>
+      <div class="reminder-time">Pendiente</div>`;
+    list.appendChild(div);
+  });
+
+  meetings.forEach(m => {
+    const [hh,mm] = m.time.split(':');
+    const h = parseInt(hh); const ampm = h>=12?'PM':'AM'; const h12 = h%12||12;
+    const div = document.createElement('div');
+    div.className = 'reminder-item';
+    div.innerHTML = `
+      <div class="reminder-icon">📅</div>
+      <div class="reminder-text"><h4>${m.title}</h4><p>${m.prep||'Sin preparación especial'}</p></div>
+      <div class="reminder-time">${padZ(h12)}:${mm} ${ampm}</div>`;
+    list.appendChild(div);
+  });
+
+  renderInstallGuide();
+}
+
+function toggleReminders(el) {
+  localStorage.setItem(K.remind, el.checked ? 'true' : 'false');
+  renderReminders();
+}
+
+// ══════════════════════════════════
+//  INSTALL GUIDE
+// ══════════════════════════════════
+const STEPS_ANDROID = [
+  { t:'Abre este archivo en Chrome', d:'Comparte el archivo a tu teléfono (WhatsApp, email, OneDrive). Ábrelo en Chrome.' },
+  { t:'Toca el menú ⋮ (tres puntos)', d:'Está en la esquina superior derecha del navegador.' },
+  { t:'Selecciona "Agregar a pantalla de inicio"', d:'O "Instalar app" si aparece esa opción automáticamente.' },
+  { t:'Confirma y listo 🎉', d:'La app aparecerá en tu pantalla de inicio como una app normal.' },
+];
+const STEPS_IOS = [
+  { t:'Abre este archivo en Safari', d:'Comparte el archivo a tu iPhone y ábrelo en Safari (no en Chrome ni otro navegador).' },
+  { t:'Toca el botón compartir ⬆️', d:'Está en la barra de herramientas del navegador.' },
+  { t:'Selecciona "Agregar a inicio"', d:'Desplázate hacia abajo en el menú hasta encontrarlo.' },
+  { t:'Confirma el nombre y toca "Agregar"', d:'La app estará en tu pantalla de inicio. ¡Lista! 🎉' },
+];
+
+function renderInstallGuide() {
+  const c = document.getElementById('install-guide');
+  if(!c) return;
+  c.innerHTML = `
+    <div style="background:white;border-radius:14px;overflow:hidden;box-shadow:var(--shadow);">
+      <div style="display:flex;border-bottom:1px solid #f3f4f6;">
+        <button onclick="showTab('android')" id="tab-android" style="flex:1;padding:12px;border:none;background:#eef2ff;color:var(--purple);font-weight:700;font-size:13px;cursor:pointer;">🤖 Android</button>
+        <button onclick="showTab('ios')" id="tab-ios" style="flex:1;padding:12px;border:none;background:none;color:var(--gray);font-size:13px;cursor:pointer;">🍎 iPhone</button>
+      </div>
+      <div id="steps-android" style="padding:14px;">${buildSteps(STEPS_ANDROID)}</div>
+      <div id="steps-ios" style="padding:14px;display:none;">${buildSteps(STEPS_IOS)}</div>
+    </div>`;
+}
+
+function buildSteps(steps) {
+  return steps.map((s,i) => `
+    <div class="install-step">
+      <div class="step-num">${i+1}</div>
+      <div class="step-text"><h4>${s.t}</h4><p>${s.d}</p></div>
+    </div>`).join('');
+}
+
+function showTab(which) {
+  document.getElementById('steps-android').style.display = which==='android' ? 'block' : 'none';
+  document.getElementById('steps-ios').style.display     = which==='ios'     ? 'block' : 'none';
+  document.getElementById('tab-android').style.cssText   = which==='android' ? 'flex:1;padding:12px;border:none;background:#eef2ff;color:var(--purple);font-weight:700;font-size:13px;cursor:pointer;' : 'flex:1;padding:12px;border:none;background:none;color:var(--gray);font-size:13px;cursor:pointer;';
+  document.getElementById('tab-ios').style.cssText       = which==='ios'     ? 'flex:1;padding:12px;border:none;background:#eef2ff;color:var(--purple);font-weight:700;font-size:13px;cursor:pointer;' : 'flex:1;padding:12px;border:none;background:none;color:var(--gray);font-size:13px;cursor:pointer;';
+}
+
+function showInstallGuide() {
+  document.getElementById('modal-title').textContent = '📲 Instalar en tu teléfono';
+  document.getElementById('modal-body').innerHTML = `
+    <p style="font-size:13px;color:var(--gray);margin-bottom:14px;">Sigue estos pasos según tu teléfono:</p>
+    <div style="background:white;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
+      <div style="display:flex;border-bottom:1px solid #f3f4f6;">
+        <button onclick="showModalTab('android')" id="mtab-android" style="flex:1;padding:12px;border:none;background:#eef2ff;color:var(--purple);font-weight:700;font-size:13px;cursor:pointer;">🤖 Android</button>
+        <button onclick="showModalTab('ios')" id="mtab-ios" style="flex:1;padding:12px;border:none;background:none;color:var(--gray);font-size:13px;cursor:pointer;">🍎 iPhone</button>
+      </div>
+      <div id="msteps-android" style="padding:14px;">${buildSteps(STEPS_ANDROID)}</div>
+      <div id="msteps-ios" style="padding:14px;display:none;">${buildSteps(STEPS_IOS)}</div>
+    </div>`;
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function showModalTab(which) {
+  document.getElementById('msteps-android').style.display = which==='android'?'block':'none';
+  document.getElementById('msteps-ios').style.display     = which==='ios'?'block':'none';
+}
+
+// ══════════════════════════════════
+//  PWA INSTALL PROMPT
+// ══════════════════════════════════
+let deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault(); deferredPrompt = e;
+  document.getElementById('install-banner').style.display = 'flex';
+});
+
+function installPWA() {
+  if(deferredPrompt) { deferredPrompt.prompt(); deferredPrompt.userChoice.then(r => { if(r.outcome==='accepted') document.getElementById('install-banner').style.display='none'; deferredPrompt=null; }); }
+  else { showInstallGuide(); }
+}
+
+// ══════════════════════════════════
+//  NAV
+// ══════════════════════════════════
+function goTo(page, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-'+page).classList.add('active');
+  btn.classList.add('active');
+  if(page==='reminders') renderReminders();
+  if(page==='projects')  renderProjects();
+  if(page==='agenda')    renderMeetings();
+}
+
+function closeModal() { document.getElementById('modal-overlay').classList.remove('open'); }
+
+// ══════════════════════════════════
+//  INIT
+// ══════════════════════════════════
+setupDate();
+renderTasks();
+renderProjects();
+renderMeetings();
+renderReminders();
+
+// Lazy level bar animation
+setTimeout(() => {
+  document.getElementById('level-fill').style.width = '15%';
+  document.getElementById('xp-label').textContent   = '15 / 100 XP';
+}, 500);
+
+// Hourly reminder check (while app is open)
+setInterval(() => {
+  const h = new Date().getHours();
+  if(h>=8 && h<=20 && isRemindOn()) {
+    const tasks   = getTasks(); const done = getDone();
+    const pending = tasks.filter(t => !done.includes(t.id));
+    if(pending.length > 0 && 'Notification' in window && Notification.permission==='granted') {
+      new Notification('⏰ Recordatorio – Colega App', {
+        body: `Tienes ${pending.length} tarea(s) pendiente(s). ¡Tú puedes! 💪`,
+        icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" rx="20" fill="%23667eea"/><text y=".9em" font-size="80" x="10">🤖</text></svg>'
+      });
+    }
+  }
+}, 3600000); // cada hora
+
+// Request notification permission
+if('Notification' in window && Notification.permission==='default') {
+  setTimeout(() => Notification.requestPermission(), 3000);
+}
+</script>
+</body>
+</html>
