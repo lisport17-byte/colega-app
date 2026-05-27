@@ -477,19 +477,39 @@ async function connectGist(){
   if(!token){toast('Ingresa el token primero','error');return;}
   setSyncStatus('syncing','Conectando...');
   try{
-    // Verify token works
+    // 1. Verificar token
     const r=await fetch('https://api.github.com/user',{headers:{'Authorization':'token '+token,'Accept':'application/vnd.github.v3+json'}});
     if(!r.ok)throw new Error('Token inválido ('+r.status+')');
     const user=await r.json();
     save(K.ghToken,token);
-    // Create a new gist with current data
-    await createGist(token);
-    toast('Conectado como @'+user.login+' — sync activo','success');
+    // 2. Buscar Gist existente — si ya lo configuraste en otro dispositivo lo encuentra automáticamente
+    setSyncStatus('syncing','Buscando datos en el cloud...');
+    const existingId=await findExistingGist(token);
+    if(existingId){
+      save(K.gistId,existingId);
+      await pullFromGist(false);
+      toast('Conectado @'+user.login+' — datos del cloud cargados','success');
+    }else{
+      await createGist(token);
+      toast('Conectado @'+user.login+' — Gist creado, sync activo','success');
+    }
     renderSyncUI();
   }catch(e){
     setSyncStatus('error','Error');
     toast('Error: '+e.message,'error');
   }
+}
+
+async function findExistingGist(token){
+  try{
+    const r=await fetch('https://api.github.com/gists?per_page=100',{
+      headers:{'Authorization':'token '+token,'Accept':'application/vnd.github.v3+json'}
+    });
+    if(!r.ok)return null;
+    const gists=await r.json();
+    const found=gists.find(g=>g.description==='Colega App — Datos sincronizados'&&g.files&&g.files[GIST_FILE]);
+    return found?found.id:null;
+  }catch{return null;}
 }
 
 async function createGist(token){
