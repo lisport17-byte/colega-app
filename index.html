@@ -507,8 +507,12 @@ async function findExistingGist(token){
     });
     if(!r.ok)return null;
     const gists=await r.json();
-    const found=gists.find(g=>g.description==='Colega App — Datos sincronizados'&&g.files&&g.files[GIST_FILE]);
-    return found?found.id:null;
+    // Find ALL Colega gists and pick the most recently updated one
+    const colegaGists=gists.filter(g=>g.description==='Colega App — Datos sincronizados'&&g.files&&g.files[GIST_FILE]);
+    if(!colegaGists.length)return null;
+    // Sort by updated_at descending — most recent first
+    colegaGists.sort((a,b)=>new Date(b.updated_at)-new Date(a.updated_at));
+    return colegaGists[0].id;
   }catch{return null;}
 }
 
