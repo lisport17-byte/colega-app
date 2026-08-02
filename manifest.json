@@ -1,7 +1,8 @@
 {
   "name": "Colega — Asistente Personal",
   "short_name": "Colega",
-  "description": "Asistente personal: plan del día, tareas, enfoque y recordatorios",
+  "description": "Asistente personal: objetivos, plan del día, bienestar, aprendizaje y recordatorios",
+  "categories": ["productivity", "lifestyle", "health"],
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

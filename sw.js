@@ -1,5 +1,5 @@
-// Colega v5 — Service Worker: offline + notificaciones en background
-const CACHE = 'colega-v5-1';
+// Colega v6 — Service Worker: offline + notificaciones y acciones en background
+const CACHE = 'colega-v6-1';
 const ASSETS = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -33,17 +33,7 @@ self.addEventListener('fetch', e => {
   }
 });
 
-self.addEventListener('notificationclick', e => {
-  e.notification.close();
-  e.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
-      for (const c of list) { if ('focus' in c) return c.focus(); }
-      return self.clients.openWindow('./');
-    })
-  );
-});
-
-// ── Recordatorios en background (Periodic Background Sync, Android PWA instalada) ──
+// ── IndexedDB: canal de datos compartido con la página ──────────────
 function idbOpen() {
   return new Promise((res, rej) => {
     const r = indexedDB.open('colega-db', 1);
@@ -68,27 +58,56 @@ function idbSet(db, key, val) {
   });
 }
 
-async function fireDueReminders() {
+const ACTIONS = {
+  task:  [{ action: 'done', title: '✓ Hecho' }, { action: 'snooze', title: '⏰ +10 min' }],
+  event: [{ action: 'snooze', title: '⏰ +10 min' }],
+  block: [{ action: 'snooze', title: '⏰ +10 min' }]
+};
+
+async function notify(r) {
+  const opts = {
+    body: r.body, tag: r.id, icon: 'icon-192.png', badge: 'icon-192.png',
+    vibrate: [200, 100, 200],
+    data: { url: './', kind: r.kind, entityId: r.entityId, remId: r.id }
+  };
+  const acts = ACTIONS[r.kind];
+  if (acts && self.registration.showNotification) opts.actions = acts;
+  await self.registration.showNotification(r.title, opts);
+}
+
+// ── Recordatorios en background (Periodic Background Sync, Android PWA instalada) ──
+// `ahead` amplía la ventana hacia delante: el push del servidor puede
+// llegar unos segundos antes del instante exacto del recordatorio.
+async function fireDueReminders(ahead) {
+  let db;
+  let count = 0;
   try {
-    const db = await idbOpen();
+    db = await idbOpen();
     const queue = (await idbGet(db, 'queue')) || [];
+    const snooze = (await idbGet(db, 'snooze')) || [];
     const fired = (await idbGet(db, 'fired')) || {};
     const now = Date.now();
+    const limit = now + (ahead || 0);
     let dirty = false;
-    for (const r of queue) {
+
+    for (const r of queue.concat(snooze)) {
       // dispara lo vencido en las últimas 2h que aún no se notificó
-      if (r.at <= now && r.at > now - 7200000 && !fired[r.id]) {
+      if (r.at <= limit && r.at > now - 7200000 && !fired[r.id]) {
         fired[r.id] = now;
         dirty = true;
-        await self.registration.showNotification(r.title, {
-          body: r.body, tag: r.id, icon: 'icon-192.png', badge: 'icon-192.png',
-          vibrate: [200, 100, 200], data: { url: './' }
-        });
+        count++;
+        await notify(r);
       }
     }
+
+    // poda: recordatorios pospuestos ya disparados o caducados
+    const keep = snooze.filter(r => !fired[r.id] && r.at > now - 7200000);
+    if (keep.length !== snooze.length) await idbSet(db, 'snooze', keep);
+
     if (dirty) await idbSet(db, 'fired', fired);
-    db.close();
   } catch (e) { /* sin datos aún */ }
+  finally { if (db) db.close(); }
+  return count;
 }
 
 self.addEventListener('periodicsync', e => {
@@ -97,4 +116,98 @@ self.addEventListener('periodicsync', e => {
 
 self.addEventListener('message', e => {
   if (e.data && e.data.type === 'check-reminders') e.waitUntil(fireDueReminders());
+});
+
+// ── WEB PUSH ────────────────────────────────────────────────────────
+// El servidor envía un push VACÍO: no conoce el contenido de tus avisos.
+// Aquí se recupera el texto real desde IndexedDB y se compone la notificación.
+self.addEventListener('push', e => {
+  e.waitUntil((async () => {
+    const n = await fireDueReminders(90000);
+    // El navegador exige que todo push produzca algo visible. Si el aviso
+    // llegó adelantado o ya se había mostrado, dejamos un resumen mínimo.
+    if (n === 0) {
+      await self.registration.showNotification('Colega', {
+        body: 'Toca para ver tu plan de ahora.',
+        tag: 'colega-generic', icon: 'icon-192.png', badge: 'icon-192.png',
+        data: { url: './' }
+      });
+    }
+  })());
+});
+
+// Los navegadores rotan la suscripción cada cierto tiempo: hay que reenviarla.
+self.addEventListener('pushsubscriptionchange', e => {
+  e.waitUntil((async () => {
+    const cs = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    cs.forEach(c => c.postMessage({ type: 'push-resubscribe' }));
+    let db;
+    try {
+      db = await idbOpen();
+      await idbSet(db, 'pushStale', Date.now());
+    } catch (err) { /* la app lo reintentará al abrirse */ }
+    finally { if (db) db.close(); }
+  })());
+});
+
+// ── Clic y acciones en la notificación ──────────────────────────────
+async function openApp() {
+  const list = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+  for (const c of list) { if ('focus' in c) return c.focus(); }
+  return self.clients.openWindow('./');
+}
+
+async function ack(title, body) {
+  const tag = 'colega-ack';
+  await self.registration.showNotification(title, {
+    body, tag, icon: 'icon-192.png', badge: 'icon-192.png', silent: true
+  });
+  // desaparece sola: es solo un acuse de recibo
+  await new Promise(r => setTimeout(r, 4000));
+  const ns = await self.registration.getNotifications({ tag });
+  ns.forEach(n => n.close());
+}
+
+async function handleAction(action, d) {
+  let db;
+  try {
+    db = await idbOpen();
+
+    if (action === 'done' && d.entityId) {
+      // El SW no puede escribir en localStorage: deja la orden en cola
+      // y la página la aplica en cuanto se abre.
+      const ops = (await idbGet(db, 'ops')) || [];
+      ops.push({ kind: d.kind, action: 'done', entityId: d.entityId, at: Date.now() });
+      await idbSet(db, 'ops', ops);
+      const cs = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      cs.forEach(c => c.postMessage({ type: 'ops-updated' }));
+      await ack('✓ Hecho', 'Se marcará como completada.');
+    }
+
+    if (action === 'snooze' && d.remId) {
+      const queue = (await idbGet(db, 'queue')) || [];
+      const snooze = (await idbGet(db, 'snooze')) || [];
+      const base = queue.concat(snooze).find(r => r.id === d.remId);
+      snooze.push({
+        id: d.remId + '_s' + Date.now(),
+        at: Date.now() + 600000,
+        title: base ? base.title : '⏰ Recordatorio',
+        body: 'Pospuesto — aquí lo tienes de nuevo',
+        kind: d.kind, entityId: d.entityId
+      });
+      await idbSet(db, 'snooze', snooze);
+      await ack('⏰ Pospuesto', 'Te aviso otra vez en 10 minutos.');
+    }
+  } catch (e) { /* nada que hacer en background */ }
+  finally { if (db) db.close(); }
+}
+
+self.addEventListener('notificationclick', e => {
+  const d = e.notification.data || {};
+  e.notification.close();
+  if (e.action === 'done' || e.action === 'snooze') {
+    e.waitUntil(handleAction(e.action, d));
+    return;
+  }
+  e.waitUntil(openApp());
 });

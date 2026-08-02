@@ -1,0 +1,16 @@
+{
+  "name": "colega-push",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "description": "Servidor de recordatorios push y cerebro conversacional de Colega",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.70.0"
+  },
+  "scripts": {
+    "genkeys": "node genkeys.mjs",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail"
+  }
+}

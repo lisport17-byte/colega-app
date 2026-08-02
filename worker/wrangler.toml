@@ -1,0 +1,23 @@
+name = "colega-push"
+main = "src/index.js"
+compatibility_date = "2024-11-01"
+
+# Revisa cada minuto si hay recordatorios vencidos.
+[triggers]
+crons = ["* * * * *"]
+
+# Crea el namespace con:  npx wrangler kv namespace create COLEGA
+# y pega aquí el id que te devuelva.
+[[kv_namespaces]]
+binding = "COLEGA"
+id = "PEGA_AQUI_TU_KV_ID"
+
+[vars]
+# Pon aquí tu email. Es obligatorio en el estándar VAPID: los servidores push
+# lo usan para contactarte si tu Worker se comporta mal. No es público.
+VAPID_SUBJECT = "mailto:TU-EMAIL@ejemplo.com"
+# Secretos — se definen con `npx wrangler secret put <NOMBRE>`, nunca aquí:
+#   VAPID_PUBLIC_KEY    (Fase 3 — push)
+#   VAPID_PRIVATE_JWK   (Fase 3 — push)
+#   ANTHROPIC_API_KEY   (Fase 4 — asistente)
+#   APP_SECRET          (Fase 4 — protege el Worker de uso ajeno)

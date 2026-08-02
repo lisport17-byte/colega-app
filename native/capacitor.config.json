@@ -1,0 +1,25 @@
+{
+  "appId": "app.colega.asistente",
+  "appName": "Colega",
+  "webDir": "www",
+  "backgroundColor": "#0d0d0d",
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#0d0d0d"
+  },
+  "ios": {
+    "contentInset": "always",
+    "backgroundColor": "#0d0d0d"
+  },
+  "plugins": {
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_colega",
+      "iconColor": "#c9a84c"
+    },
+    "SplashScreen": {
+      "launchShowDuration": 600,
+      "backgroundColor": "#0d0d0d",
+      "showSpinner": false
+    }
+  }
+}
