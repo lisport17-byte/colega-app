@@ -1222,7 +1222,7 @@ select option{background:var(--bg2)}
 
     <div style="text-align:center;margin-top:20px;font-size:11px;color:var(--tx2);letter-spacing:.07em">
       Desarrollado con Claude · Anthropic<br>
-      <span style="color:var(--gold-dim)">v6.3 — Bandeja de notas · Completadas plegadas</span>
+      <span style="color:var(--gold-dim)">v6.4 — Intérprete local · Dictado gratis sin servidor</span>
     </div>
   </div>
 </div>
@@ -3825,9 +3825,10 @@ function renderDiag(){
   // 8. Asistente
   const ac=aiCfg();
   rows.push(ac.on
-    ? dgRow('ok','Asistente conversacional activo','Pulsa el botón dorado para hablar con él.')
-    : dgRow('warn','Asistente sin configurar','Requiere tu Worker con una clave de Anthropic.',
-        '<span class="dg-fix">Fase 4 en worker/README.md</span>'));
+    ? dgRow('ok','Asistente conversacional activo','Con Claude: entiende cualquier frase y conversa.')
+    : dgRow('ok','Asistente en modo local',
+        'Funciona <b>sin servidor y sin coste</b>: dicta y crea tareas, notas, eventos y ejercicio. Para conversar de verdad, conecta un Worker.',
+        '<span class="dg-fix" onclick="closeChat();openChat()">Probar el dictado</span>'));
 
   // 9. Sincronización
   if(getToken()&&getGistId())rows.push(getSyncPass()
@@ -3903,6 +3904,208 @@ function onbTemplate(){
   if(el)el.textContent='✓ Plan creado para Lun–Vie — edítalo en HOY → Planificar';
 }
 
+// ── INTÉRPRETE LOCAL ──────────────────────────────────────────
+// Convierte lo que dictas en acciones SIN servidor, sin clave y sin coste.
+// El reconocimiento de voz ya lo da el navegador gratis; esto es la parte
+// que lo entiende. Cuando hay Worker con Claude, él toma el relevo y maneja
+// frases que esto no alcanza — pero sin Worker la app sigue siendo útil.
+const DOW_ES={domingo:0,lunes:1,martes:2,miercoles:3,'miércoles':3,jueves:4,viernes:5,sabado:6,'sábado':6};
+const NUM_ES={una:1,uno:1,un:1,dos:2,tres:3,cuatro:4,cinco:5,seis:6,siete:7,ocho:8,nueve:9,diez:10,
+  once:11,doce:12,trece:13,catorce:14,quince:15,veinte:20,treinta:30,cuarenta:40,cuarenta_y_cinco:45,sesenta:60,noventa:90};
+// Normaliza SIN cambiar la longitud: así los índices del texto normalizado
+// valen tal cual sobre el original y se puede recortar con precisión.
+const DEACC={'á':'a','é':'e','í':'i','ó':'o','ú':'u','ü':'u','ñ':'n'};
+const norm=s=>s.toLowerCase().replace(/[áéíóúüñ]/g,c=>DEACC[c]||c);
+// Recorta varios tramos del texto original y deja el título limpio.
+function cutSpans(orig,spans){
+  let out=orig;
+  spans.filter(Boolean).sort((a,b)=>b[0]-a[0])
+    .forEach(([i,j])=>{out=out.slice(0,i)+' '+out.slice(j);});
+  return out;
+}
+
+// "el jueves", "mañana", "en 3 días" → {date, span}
+function parseFecha(s){
+  const hoy=new Date();
+  const iso=d=>dateStrOf(d);
+  const mas=n=>{const d=new Date();d.setDate(d.getDate()+n);return iso(d);};
+  const R=(m,date)=>({date,span:[m.index,m.index+m[0].length]});
+  let m;
+  if((m=s.match(/\bpasado ?manana\b/)))return R(m,mas(2));
+  // "manana" es el dia siguiente, pero "de la manana" / "por la manana" es
+  // una franja horaria. Sin esta distincion, "el viernes a las 9 de la
+  // manana" se agendaba para manana en vez de para el viernes.
+  for(const mm of s.matchAll(/\bmanana\b/g)){
+    if(!/(?:de|por) la $/.test(s.slice(Math.max(0,mm.index-7),mm.index)))return R(mm,mas(1));
+  }
+  if((m=s.match(/\bhoy\b/)))return R(m,iso(hoy));
+  if((m=s.match(/\ben (\d+|un|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez) (dias?|semanas?|mes|meses)\b/))){
+    const n=parseInt(m[1])||NUM_ES[m[1]]||1;
+    const mult=/semana/.test(m[2])?7:/mes/.test(m[2])?30:1;
+    return R(m,mas(n*mult));
+  }
+  if((m=s.match(/\b(?:el |este |proximo |el proximo )?(domingo|lunes|martes|miercoles|jueves|viernes|sabado)\b/))){
+    const obj=DOW_ES[m[1]];
+    let delta=(obj-hoy.getDay()+7)%7;
+    if(delta===0)delta=7;
+    return R(m,mas(delta));
+  }
+  if((m=s.match(/\bel (\d{1,2}) de (enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\b/))){
+    const mi=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'].indexOf(m[2]);
+    const d=new Date(hoy.getFullYear(),mi,parseInt(m[1]));
+    if(d<hoy)d.setFullYear(d.getFullYear()+1);
+    return R(m,iso(d));
+  }
+  return{date:'',span:null};
+}
+
+// "a las 10", "a las 3 y media de la tarde" → {time, span}
+function parseHora(s){
+  let m=s.match(/\ba la ?s? ?(\d{1,2})[:.](\d{2})\s*(?:de la (?:manana|tarde|noche|madrugada)|am|pm)?/);
+  if(m){
+    let h=+m[1];
+    if(/tarde|noche|pm/.test(m[0])&&h<12)h+=12;
+    return{time:pad(h%24)+':'+pad(+m[2]),span:[m.index,m.index+m[0].length]};
+  }
+  m=s.match(/\ba la ?s? ?(\d{1,2}|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce)(\s+y media|\s+y cuarto|\s+menos cuarto|\s+y (\d{1,2}))?(\s*(?:de la (manana|tarde|noche|madrugada)|am|pm))?/);
+  if(!m)return{time:'',span:null};
+  let h=parseInt(m[1]);
+  if(isNaN(h))h=NUM_ES[m[1]]||0;
+  let min=0;
+  if(m[2]){
+    if(/y media/.test(m[2]))min=30;
+    else if(/y cuarto/.test(m[2]))min=15;
+    else if(/menos cuarto/.test(m[2])){min=45;h--;}
+    else if(m[3])min=parseInt(m[3])||0;
+  }
+  const franja=m[4]||'';
+  if(/tarde|noche|pm/.test(franja)&&h<12)h+=12;
+  else if(/manana|madrugada|am/.test(franja)&&h===12)h=0;
+  else if(!franja&&h>=1&&h<=6)h+=12;   // "a las 3" en habla normal es la tarde
+  if(h<0)h+=24;
+  return{time:pad(h%24)+':'+pad(min),span:[m.index,m.index+m[0].length]};
+}
+
+// Verbos que abren una intención. El orden importa: el primero que encaje gana.
+const INTENTS=[
+  {k:'compra',    re:/\b(?:tengo que |necesito |hay que |debo )?(?:comprar|compra)\b/},
+  {k:'investigar',re:/\b(?:investigar|buscar informacion(?: sobre)?|mirar lo de|leer sobre|documentarme sobre)\b/},
+  {k:'evento',    re:/\b(?:reunion|reunirme|junta|cita|entrevista|videollamada)\b/},
+  {k:'ejercicio', re:/\b(?:entrene|hice|corri|camine|nade|fui al gimnasio|estuve entrenando)\b/},
+  {k:'objetivo',  re:/\b(?:mi objetivo es|quiero lograr|me propongo|quiero conseguir)\b/},
+  {k:'idea',      re:/\b(?:se me ocurre|tengo una idea|idea:)\b/},
+  {k:'tarea',     re:/\b(?:recuerdame|recordarme|acuerdame|acordarme|tengo que|necesito|debo|hay que)\b/},
+  {k:'nota',      re:/\b(?:apunta|anota|guarda|toma nota|no olvides|recuerda)\b/}
+];
+function matchIntent(s){
+  for(const i of INTENTS){
+    const m=s.match(i.re);
+    if(m)return{k:i.k,span:[m.index,m.index+m[0].length]};
+  }
+  return null;
+}
+
+// Trocea "compra café y recuérdame llamar a Ana" en dos intenciones.
+function splitIntents(text){
+  const trozos=text.split(/\s*(?:,\s*(?:y\s+)?|\s+y\s+|\s*;\s*|\.\s+|\s+ademas\s+|\s+tambien\s+)/i)
+    .map(x=>x.trim()).filter(Boolean);
+  const partes=[];let actual='';
+  for(const tr of trozos){
+    const abre=!!matchIntent(norm(tr));
+    if(abre&&actual){partes.push(actual);actual=tr;}
+    else actual=actual?actual+' y '+tr:tr;
+  }
+  if(actual)partes.push(actual);
+  return partes.length?partes:[text];
+}
+
+function limpiar(s){
+  return s.replace(/\s+/g,' ').trim()
+    .replace(/^(?:de |que |a |al |el |la |lo de |para )/i,'')
+    .replace(/[.,;:]+$/,'')
+    .replace(/^./,c=>c.toUpperCase());
+}
+
+function parseUno(frag){
+  const s=norm(frag);
+  const h=parseHora(s);
+  // Oculta el tramo de la hora antes de buscar la fecha (rellenando con
+  // espacios para no mover los indices). Evita que "a las 9 de la manana"
+  // contamine la deteccion del dia.
+  const sinHora=h.span
+    ? s.slice(0,h.span[0])+' '.repeat(h.span[1]-h.span[0])+s.slice(h.span[1])
+    : s;
+  const f=parseFecha(sinHora),tm=matchIntent(s);
+  const tipo=tm&&tm.k;
+  // En un evento el verbo forma parte del título natural ("Reunión con Ana"),
+  // en el resto sobra ("Recuérdame llamar" → "Llamar").
+  const cortes=[f.span,h.span];
+  if(tm&&tipo!=='evento')cortes.push(tm.span);
+  let titulo=limpiar(cutSpans(frag,cortes));
+  if(!titulo)return null;
+
+  if(tipo==='ejercicio'){
+    let mins=30;
+    const mm=s.match(/(\d+)\s*(?:min|minutos?|m)\b/);
+    if(mm)mins=+mm[1];
+    else if(/media hora/.test(s))mins=30;
+    else if(/\bhora\b/.test(s))mins=60;
+    const t=/gimnasio|pesas|fuerza/.test(s)?'fuerza':/corr|nad|bici|cardio/.test(s)?'cardio':
+            /camin/.test(s)?'caminata':/futbol|tenis|padel|baloncesto/.test(s)?'deporte':'otro';
+    return{name:'registrar_ejercicio',input:{tipo:t,minutos:Math.min(600,mins),intensidad:'media'}};
+  }
+  if(tipo==='evento'){
+    return{name:'crear_evento',input:{titulo,fecha:f.date||todayStr(),hora:h.time||'',
+      tipo:/cita|entrevista/.test(s)?'cita':'reunion'}};
+  }
+  if(tipo==='objetivo'){
+    return{name:'crear_objetivo',input:{titulo,
+      area:/correr|peso|gimnasio|salud|maraton|dormir/.test(s)?'salud':
+           /aprender|curso|idioma|estudiar|leer/.test(s)?'aprendizaje':
+           /ahorr|dinero|invertir|deuda/.test(s)?'finanzas':'personal',
+      horizonte:'trimestre',fecha_limite:f.date||''}};
+  }
+  if(tipo==='compra')return{name:'crear_nota',input:{texto:titulo,tipo:'compra'}};
+  if(tipo==='investigar')return{name:'crear_nota',input:{texto:titulo,tipo:'investigar'}};
+  if(tipo==='idea')return{name:'crear_nota',input:{texto:titulo,tipo:'idea'}};
+
+  // Con fecha u hora es tarea; sin nada que la sitúe en el tiempo, es nota.
+  if(tipo==='tarea'||f.date||h.time){
+    return{name:'crear_tarea',input:{titulo,fecha:f.date||(h.time?todayStr():''),hora:h.time,
+      prioridad:/urgente|importante|cuanto antes/.test(s)?'alta':'media'}};
+  }
+  if(tipo==='nota')return{name:'crear_nota',input:{texto:titulo,tipo:'info'}};
+  return null;
+}
+
+function parseIntent(text){
+  return splitIntents(text).map(parseUno).filter(Boolean).slice(0,6);
+}
+
+// Respuesta del modo local: sin red, sin coste, instantánea.
+function localReply(text){
+  const acts=parseIntent(text);
+  const s=norm(text);
+  if(!acts.length){
+    if(/\bque (?:deberia|debo|hago|toca)\b|\bque hago ahora\b/.test(s)){
+      const t=todayStr();
+      const late=tasks.filter(x=>!x.done&&x.date&&x.date<t);
+      const mits=tasks.filter(x=>x.mit&&x.mitDate===t&&!x.done);
+      const pend=tasks.filter(x=>!x.done&&x.date===t);
+      const cur=currentBlock();
+      if(late.length)return{text:'Cierra primero lo atrasado: '+late[0].title+'.',actions:[]};
+      if(mits.length)return{text:'Tu innegociable de hoy: '+mits[0].title+'.',actions:[]};
+      if(cur)return{text:'Estás en el bloque '+cur.title+', hasta las '+cur.end+'. Céntrate en eso.',actions:[]};
+      if(pend.length)return{text:'Empieza por '+pend[0].title+'.',actions:[]};
+      return{text:'No tienes nada pendiente hoy. Buen momento para adelantar un objetivo.',actions:[]};
+    }
+    if(/\bresume|resumen|mi dia\b/.test(s))return{text:briefingText(),actions:[]};
+    return{text:'En modo local entiendo instrucciones concretas. Prueba con:\n\n• "Recuérdame llamar al banco mañana a las 10"\n• "Comprar café"\n• "Reunión con Ana el jueves a las 4"\n• "Investigar bombas de calor"\n• "Hice 40 minutos de gimnasio"\n\nPara conversar de verdad hace falta conectar el asistente en Perfil.',actions:[]};
+  }
+  const n=acts.length;
+  return{text:n===1?'Listo, esto es lo que entendí:':'Entendí '+n+' cosas:',actions:acts};
+}
+
 // ── ASISTENTE CONVERSACIONAL ──────────────────────────────────
 // La conversación viaja a tu Worker y de ahí a Claude. Es el único punto
 // del sistema donde tus datos salen del teléfono en claro — por eso está
@@ -3936,15 +4139,12 @@ const SUGG=['¿Qué debería hacer ahora?','Resume mi día','Recuérdame llamar 
 function renderChat(){
   const b=document.getElementById('chat-body');
   const cfg=aiCfg();
-  if(!cfg.on){
-    b.innerHTML=`<div class="chat-empty"><b>Asistente sin configurar</b>
-      Necesita tu propio servidor con una clave de Anthropic.<br>Instrucciones en <b style="display:inline;color:var(--gold)">worker/README.md</b>.
-      <div class="sugg"><button onclick="closeChat();goPage('profile')">Ir a configurarlo</button></div></div>`;
-    return;
-  }
   if(!chatLog.length){
-    b.innerHTML=`<div class="chat-empty"><b>Dime qué necesitas</b>
-      Puedo crear tareas, objetivos, bloques y recordatorios directamente.<br>Nada se guarda sin que lo confirmes.
+    b.innerHTML=`<div class="chat-empty"><b>${cfg.on?'Dime qué necesitas':'Dicta y lo organizo'}</b>
+      ${cfg.on
+        ? 'Puedo crear tareas, objetivos, bloques y recordatorios, y conversar sobre tu día.'
+        : 'Funciona <b style="display:inline">sin servidor y sin coste</b>: entiendo instrucciones concretas aquí mismo, en tu teléfono.'}
+      <br>Nada se guarda sin que lo confirmes.
       <div class="sugg">${SUGG.map(s=>`<button onclick="quickAsk(this.textContent)">${esc(s)}</button>`).join('')}</div></div>`;
     return;
   }
@@ -4058,7 +4258,6 @@ function chatSnapshot(){
 }
 async function sendChat(){
   const cfg=aiCfg();
-  if(!cfg.on){toast('Configura el asistente en Perfil','error');return;}
   if(chatBusy)return;
   const ta=document.getElementById('chat-in');
   const text=ta.value.trim();
@@ -4075,6 +4274,18 @@ async function sendChat(){
   const dots=document.createElement('div');
   dots.className='typing';dots.innerHTML='<i></i><i></i><i></i>';
   body.appendChild(dots);scrollChat();
+
+  // Sin Worker configurado, el interprete local resuelve en el propio movil.
+  if(!cfg.on){
+    const d=localReply(text);
+    dots.remove();
+    chatLog.push({role:'assistant',text:d.text,actions:d.actions,applied:false});
+    save(K.chat,chatLog);renderChat();
+    if(voiceCfg().on&&voiceCfg().rem&&d.text)speak(d.text);
+    chatBusy=false;chatState('Listo',false);
+    document.getElementById('send-btn').disabled=false;
+    return;
+  }
 
   try{
     // Solo se envían los turnos de conversación, no las acciones aplicadas.
@@ -4258,12 +4469,14 @@ function renderAIUI(){
     document.getElementById('ai-setup').style.display='none';
     document.getElementById('ai-connected').style.display='block';
     if(fab)fab.style.display='flex';
+    const cs=document.getElementById('chat-state');if(cs)cs.textContent='Listo';
   }else{
-    st.innerHTML=`<b style="color:var(--amber)">SIN CONFIGURAR</b> — requiere tu propio servidor y clave de Anthropic.`;
+    st.innerHTML=`<b style="color:var(--blue)">MODO LOCAL</b> — ya funciona sin servidor: dicta y entiende instrucciones concretas en tu propio teléfono, gratis.<br><span style="color:var(--tx2);font-size:11.5px">Conectar un Worker añade conversación real y frases complejas.</span>`;
     document.getElementById('ai-setup').style.display='block';
     document.getElementById('ai-connected').style.display='none';
     document.getElementById('ai-url').value=cfg.url||pushCfg().url||'';
-    if(fab)fab.style.display='none';
+    if(fab)fab.style.display='flex';
+    const cs2=document.getElementById('chat-state');if(cs2)cs2.textContent='Modo local';
   }
   renderTTSBtn();
 }
