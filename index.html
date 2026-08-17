@@ -1124,9 +1124,14 @@ select option{background:var(--bg2)}
       <div style="flex:1"><div class="toggle-label">Hora del repaso</div></div>
       <input type="time" id="ns-review-time" style="width:110px" onchange="saveNotifSettings()"/>
     </div>
+    <div class="menu-item" onclick="shareICS()">
+      <div class="menu-icon"><svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="10.5" x2="15.4" y2="6.5"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/></svg></div>
+      <div class="menu-text"><div class="menu-title">Enviar agenda al calendario</div><div class="menu-desc">Compártela a Gmail o Drive — la vía que sí funciona en Android</div></div>
+      <svg viewBox="0 0 24 24" width="14" height="14" class="menu-arrow"><polyline points="9 18 15 12 9 6"/></svg>
+    </div>
     <div class="menu-item" onclick="exportICS()">
-      <div class="menu-icon"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
-      <div class="menu-text"><div class="menu-title">Exportar a calendario (.ics)</div><div class="menu-desc">Alarmas en Google Calendar / iPhone aunque la app esté cerrada</div></div>
+      <div class="menu-icon"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></div>
+      <div class="menu-text"><div class="menu-title">Descargar archivo .ics</div><div class="menu-desc">Para importarlo tú desde el ordenador</div></div>
       <svg viewBox="0 0 24 24" width="14" height="14" class="menu-arrow"><polyline points="9 18 15 12 9 6"/></svg>
     </div>
     <!-- PUSH -->
@@ -1156,8 +1161,18 @@ select option{background:var(--bg2)}
       <p>Únicamente <b style="color:var(--tx1)">a qué horas</b> quieres que te avise. El texto de cada recordatorio no sale nunca de tu teléfono: el servidor manda un impulso vacío y tu propio dispositivo compone el mensaje. En iPhone requiere iOS 16.4 o superior <b style="color:var(--gold)">con la app añadida a la pantalla de inicio</b>.</p>
     </div>
     <div class="info-card">
-      <h4>Alternativa sin servidor</h4>
-      <p>Si prefieres no desplegar nada, usa <b style="color:var(--gold)">Exportar a calendario</b>: tu calendario del sistema te avisará siempre, con sonido y en la pantalla de bloqueo. Es menos flexible, pero no requiere infraestructura.</p>
+      <h4>Cómo meter esto en Google Calendar (Android)</h4>
+      <p><b style="color:var(--red)">La app de Google Calendar de Android no sabe abrir archivos .ics.</b> Si tocas el archivo desde el gestor de archivos, dará error — no es culpa de Colega, es una limitación de Google que lleva años sin resolverse.</p>
+      <p style="margin-top:8px">Las dos vías que <b style="color:var(--green)">sí</b> funcionan:</p>
+      <p style="margin-top:8px"><b style="color:var(--gold)">1. Por Gmail (todo desde el móvil)</b><br>
+      Pulsa <b>Enviar agenda al calendario</b> → elige Gmail → envíatelo a ti mismo → abre el correo → toca el adjunto → <b>Añadir a calendario</b>.</p>
+      <p style="margin-top:8px"><b style="color:var(--gold)">2. Por la web (más rápido si tienes ordenador)</b><br>
+      Descarga el .ics → en <b>calendar.google.com</b> → engranaje → Configuración → Importar y exportar → Importar.</p>
+      <p style="margin-top:8px;color:var(--tx2)">En iPhone es más simple: descarga el .ics y ábrelo, el Calendario de Apple lo importa directamente.</p>
+    </div>
+    <div class="info-card">
+      <h4>Para un evento suelto</h4>
+      <p>En <b style="color:var(--gold)">Agenda</b>, cada evento tiene un icono de calendario que lo abre ya relleno en Google Calendar. Es la vía más rápida y fiable en Android cuando solo quieres pasar una cita.</p>
     </div>
 
     <!-- SYNC -->
@@ -1236,7 +1251,7 @@ select option{background:var(--bg2)}
 
     <div style="text-align:center;margin-top:20px;font-size:11px;color:var(--tx2);letter-spacing:.07em">
       Desarrollado con Claude · Anthropic<br>
-      <span style="color:var(--gold-dim)">v6.5 — Aviso de datos sin cifrar · Generador de frase</span>
+      <span style="color:var(--gold-dim)">v6.6 — Calendario válido RFC 5545 · Compartir a Google Calendar</span>
     </div>
   </div>
 </div>
@@ -2719,7 +2734,7 @@ function renderLearn(){
 const EV_COLOR={reunion:'var(--blue)',entrega:'var(--gold)',cita:'var(--green)',otro:'var(--steel)'};
 function evItemHTML(e){
   const ty=pickEnum(e.type,EVTYPES,'otro');
-  return `<div class="ev-item"><div class="ev-type-dot" style="background:${EV_COLOR[ty]}"></div><div class="ev-info"><div class="ev-title">${esc(e.title)}</div><div class="ev-meta">${fmtDate(e.date)}${e.time?' · '+esc(e.time):''} · ${ty}</div></div><button class="icon-btn" onclick="deleteEvent('${e.id}')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button></div>`;
+  return `<div class="ev-item"><div class="ev-type-dot" style="background:${EV_COLOR[ty]}"></div><div class="ev-info"><div class="ev-title">${esc(e.title)}</div><div class="ev-meta">${fmtDate(e.date)}${e.time?' · '+esc(e.time):''} · ${ty}</div></div><button class="icon-btn" onclick="addToGCal('${e.id}')" title="Añadir a Google Calendar"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="12" y1="14" x2="12" y2="18"/><line x1="10" y1="16" x2="14" y2="16"/></svg></button><button class="icon-btn" onclick="deleteEvent('${e.id}')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button></div>`;
 }
 function shiftMonth(d){calMonth+=d;if(calMonth>11){calMonth=0;calYear++;}else if(calMonth<0){calMonth=11;calYear--;}renderCalendar();}
 function renderCalendar(){
@@ -3050,42 +3065,133 @@ function saveNotifSettings(){
 }
 // ICS EXPORT — recordatorios a nivel de sistema operativo
 function icsEsc(s){return String(s).replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\n/g,'\\n');}
-function exportICS(){
-  const lines=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Colega//v5//ES','CALSCALE:GREGORIAN'];
-  const dt=ds=>ds.replace(/-/g,'');
-  // eventos próximos 60 días
-  const limit=dateStrOf(new Date(Date.now()+60*86400000));
-  events.filter(e=>e.date>=todayStr()&&e.date<=limit).forEach(e=>{
-    lines.push('BEGIN:VEVENT','UID:'+e.id+'@colega');
-    if(e.time){
-      const t=e.time.replace(':','')+'00';
-      lines.push('DTSTART:'+dt(e.date)+'T'+t);
-    }else lines.push('DTSTART;VALUE=DATE:'+dt(e.date));
-    lines.push('SUMMARY:'+icsEsc(e.title),'BEGIN:VALARM','TRIGGER:-PT'+settings.evLead+'M','ACTION:DISPLAY','DESCRIPTION:'+icsEsc(e.title),'END:VALARM','END:VEVENT');
+// RFC 5545 exige líneas de 75 octetos como máximo, plegadas con CRLF + espacio.
+// Se recorre por punto de código para no partir un emoji por la mitad.
+function icsFold(line){
+  const enc=new TextEncoder();
+  if(enc.encode(line).length<=75)return line;
+  const out=[];let cur='';
+  for(const ch of line){
+    const lim=out.length?74:75;   // las continuaciones gastan 1 octeto en el espacio
+    if(enc.encode(cur+ch).length>lim){out.push(cur);cur=ch;}
+    else cur+=ch;
+  }
+  if(cur)out.push(cur);
+  return out.join('\r\n ');
+}
+// Marca de creación en UTC. Es OBLIGATORIA en cada VEVENT: sin ella Google
+// Calendar rechaza el archivo entero, no solo el evento.
+function icsStamp(){
+  const d=new Date();
+  return d.getUTCFullYear()+pad(d.getUTCMonth()+1)+pad(d.getUTCDate())+'T'+
+         pad(d.getUTCHours())+pad(d.getUTCMinutes())+pad(d.getUTCSeconds())+'Z';
+}
+const icsDT=(ds,hm)=>ds.replace(/-/g,'')+'T'+hm.replace(':','')+'00';
+// Suma minutos a una hora HH:MM y devuelve {ds, hm} por si cruza medianoche.
+function hmPlus(ds,hm,mins){
+  const t=new Date(ds+'T'+hm+':00');
+  t.setMinutes(t.getMinutes()+mins);
+  return{ds:dateStrOf(t),hm:pad(t.getHours())+':'+pad(t.getMinutes())};
+}
+
+function buildICS(){
+  const stamp=icsStamp();
+  const L=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Colega//Asistente Personal//ES',
+    'CALSCALE:GREGORIAN','METHOD:PUBLISH','X-WR-CALNAME:Colega'];
+  let n=0;
+
+  const evento=(uid,titulo,ds,hm,dur,lead,todoElDia)=>{
+    L.push('BEGIN:VEVENT','UID:'+uid,'DTSTAMP:'+stamp);
+    if(todoElDia){
+      const fin=hmPlus(ds,'12:00',24*60);
+      L.push('DTSTART;VALUE=DATE:'+ds.replace(/-/g,''),'DTEND;VALUE=DATE:'+fin.ds.replace(/-/g,''));
+    }else{
+      const fin=hmPlus(ds,hm,dur);
+      L.push('DTSTART:'+icsDT(ds,hm),'DTEND:'+icsDT(fin.ds,fin.hm));
+    }
+    L.push('SUMMARY:'+icsEsc(titulo));
+    if(lead!==null){
+      L.push('BEGIN:VALARM','ACTION:DISPLAY','TRIGGER:'+(lead>0?'-PT'+lead+'M':'PT0M'),
+        'DESCRIPTION:'+icsEsc(titulo),'END:VALARM');
+    }
+    L.push('END:VEVENT');
+    n++;
+  };
+
+  const hoy=todayStr();
+  const limite=dateStrOf(new Date(Date.now()+60*86400000));
+
+  // Eventos de los próximos 60 días
+  events.filter(e=>e.date>=hoy&&e.date<=limite).forEach(e=>{
+    evento(e.id+'@colega.app',e.title,e.date,e.time||'09:00',60,
+      e.time?(settings.evLead||30):null,!e.time);
   });
-  // bloques de los próximos 14 días
-  for(let i=0;i<14;i++){
+
+  // Bloques del plan, próximos 21 días
+  for(let i=0;i<21;i++){
     const ds=dateStrOf(new Date(Date.now()+i*86400000));
     blocksFor(ds).forEach(b=>{
-      lines.push('BEGIN:VEVENT','UID:'+b.id+'_'+ds+'@colega',
-        'DTSTART:'+dt(ds)+'T'+b.start.replace(':','')+'00',
-        'DTEND:'+dt(ds)+'T'+b.end.replace(':','')+'00',
-        'SUMMARY:'+icsEsc('🕐 '+b.title),
-        'BEGIN:VALARM','TRIGGER:-PT'+(settings.blkLead||5)+'M','ACTION:DISPLAY','DESCRIPTION:'+icsEsc(b.title),'END:VALARM','END:VEVENT');
+      const ini=new Date(ds+'T'+b.start+':00'),fin=new Date(ds+'T'+b.end+':00');
+      const dur=Math.max(5,Math.round((fin-ini)/60000));
+      evento(b.id+'_'+ds.replace(/-/g,'')+'@colega.app',b.title,ds,b.start,dur,settings.blkLead||0);
     });
   }
-  // tareas con fecha+hora próximas
-  tasks.filter(t=>!t.done&&t.date&&t.time&&t.date>=todayStr()&&t.date<=limit).forEach(t=>{
-    lines.push('BEGIN:VEVENT','UID:'+t.id+'@colega',
-      'DTSTART:'+dt(t.date)+'T'+t.time.replace(':','')+'00',
-      'SUMMARY:'+icsEsc('⏰ '+t.title),
-      'BEGIN:VALARM','TRIGGER:PT0M','ACTION:DISPLAY','DESCRIPTION:'+icsEsc(t.title),'END:VALARM','END:VEVENT');
+
+  // Tareas con fecha y hora
+  tasks.filter(t=>!t.done&&t.date&&t.time&&t.date>=hoy&&t.date<=limite).forEach(t=>{
+    evento(t.id+'@colega.app',t.title,t.date,t.time,30,0);
   });
-  lines.push('END:VCALENDAR');
+
+  L.push('END:VCALENDAR');
+  // El archivo termina en CRLF, como manda el estándar.
+  return{texto:L.map(icsFold).join('\r\n')+'\r\n',n};
+}
+
+// Descarga con Blob: el `data:` URI que usaba antes lo maneja mal Chrome en
+// Android y era una de las causas del "error al abrir el archivo".
+function exportICS(){
+  const {texto,n}=buildICS();
+  if(!n){toast('No hay eventos, bloques ni tareas con hora que exportar','error',4000);return;}
+  const blob=new Blob([texto],{type:'text/calendar;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
-  a.href='data:text/calendar;charset=utf-8,'+encodeURIComponent(lines.join('\r\n'));
-  a.download='colega_agenda.ics';a.click();
-  toast('Calendario exportado — ábrelo para importar','success');
+  a.href=url;a.download='colega.ics';
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),4000);
+  toast('📅 '+n+' entradas exportadas','success',3000);
+}
+
+// En Android, Google Calendar NO importa .ics desde el gestor de archivos.
+// Compartirlo a Gmail o Drive sí funciona, y es lo que ofrece este botón.
+async function shareICS(){
+  const {texto,n}=buildICS();
+  if(!n){toast('No hay nada que exportar','error');return;}
+  const file=new File([texto],'colega.ics',{type:'text/calendar'});
+  if(navigator.canShare&&navigator.canShare({files:[file]})){
+    try{
+      await navigator.share({files:[file],title:'Agenda de Colega'});
+      return;
+    }catch(e){ if(e.name==='AbortError')return; }
+  }
+  exportICS();
+}
+
+// Ruta más fiable en Android para un evento suelto: abre la app de Google
+// Calendar con todo relleno y solo hay que guardar.
+function gcalURL(titulo,ds,hm,mins){
+  const z=s=>s.replace(/[-:]/g,'');
+  const ini=new Date(ds+'T'+(hm||'09:00')+':00');
+  const fin=new Date(ini.getTime()+(mins||60)*60000);
+  const f=d=>d.getFullYear()+pad(d.getMonth()+1)+pad(d.getDate())+'T'+
+             pad(d.getHours())+pad(d.getMinutes())+'00';
+  return 'https://calendar.google.com/calendar/render?action=TEMPLATE'+
+    '&text='+encodeURIComponent(titulo)+
+    '&dates='+f(ini)+'/'+f(fin);
+}
+function addToGCal(id){
+  const e=events.find(x=>x.id===id);
+  if(!e)return;
+  window.open(gcalURL(e.title,e.date,e.time,60),'_blank','noopener');
 }
 
 // ── PROFILE & STATS ───────────────────────────────────────────

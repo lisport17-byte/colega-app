@@ -1,5 +1,5 @@
 // Colega v6 — Service Worker: offline + notificaciones y acciones en background
-const CACHE = 'colega-v6-6';
+const CACHE = 'colega-v6-7';
 const ASSETS = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
