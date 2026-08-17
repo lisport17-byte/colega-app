@@ -113,6 +113,12 @@ select option{background:var(--bg2)}
 /* BANNER */
 .banner{display:flex;align-items:center;gap:10px;background:rgba(212,147,58,.1);border:1px solid rgba(212,147,58,.35);border-radius:var(--radius);padding:12px 14px;margin-bottom:12px;font-size:12.5px;color:var(--amber);line-height:1.5}
 .banner button{background:var(--amber);color:var(--bg0);font-size:11px;font-weight:700;padding:7px 12px;border-radius:8px;white-space:nowrap;letter-spacing:.04em}
+.banner.danger{background:rgba(224,82,82,.1);border-color:rgba(224,82,82,.45);color:var(--red)}
+.banner.danger button{background:var(--red);color:#fff}
+.pass-gen{background:var(--bg2);border:1px dashed var(--gold-dim);border-radius:var(--radius-sm);padding:12px;margin-top:9px;text-align:center;display:none}
+.pass-gen.on{display:block}
+.pass-w{font-size:15px;font-weight:600;color:var(--gold);letter-spacing:.06em;line-height:1.7;word-spacing:6px;margin-bottom:9px;user-select:all}
+.pass-h{font-size:11px;color:var(--tx2);line-height:1.5}
 /* TASKS */
 .filter-bar{display:flex;gap:6px;margin-bottom:12px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
 .filter-bar::-webkit-scrollbar{display:none}
@@ -550,6 +556,7 @@ select option{background:var(--bg2)}
       </button>
     </div>
     <div id="missed-wrap"></div>
+    <div id="sync-banner"></div>
     <div id="notif-banner"></div>
     <div class="prog-card">
       <div class="ring" id="prog-ring"><span id="prog-pct">0%</span></div>
@@ -1194,9 +1201,16 @@ select option{background:var(--bg2)}
         </div>
         <div id="enc-upgrade" style="display:none;margin-top:10px">
           <div class="form-row" style="margin-bottom:8px">
-            <input type="password" id="gh-pass-up" placeholder="Frase de cifrado (mín. 8)"/>
+            <input type="text" id="gh-pass-up" placeholder="Frase de cifrado (mín. 8)" autocomplete="off" autocapitalize="off" spellcheck="false"/>
           </div>
-          <button class="btn-sm primary" onclick="enableEncryption()">Cifrar mis datos ahora</button>
+          <div class="sync-actions">
+            <button class="btn-sm" onclick="generarFrase()">🎲 Generar una segura</button>
+            <button class="btn-sm primary" onclick="enableEncryption()">Cifrar mis datos ahora</button>
+          </div>
+          <div class="pass-gen" id="pass-gen">
+            <div class="pass-w" id="pass-words"></div>
+            <div class="pass-h">Apúntala <b style="color:var(--tx1)">ahora</b>, en papel o en tu gestor de contraseñas.<br>La necesitarás en cada dispositivo, y <b style="color:var(--red)">si la pierdes no hay forma de recuperar los datos</b>.</div>
+          </div>
         </div>
         <p style="font-size:11px;color:var(--tx2);margin-top:10px;line-height:1.5">El sync combina cambios de todos tus dispositivos sin sobreescribir — gana el cambio más reciente por elemento, no por archivo completo.</p>
       </div>
@@ -1222,7 +1236,7 @@ select option{background:var(--bg2)}
 
     <div style="text-align:center;margin-top:20px;font-size:11px;color:var(--tx2);letter-spacing:.07em">
       Desarrollado con Claude · Anthropic<br>
-      <span style="color:var(--gold-dim)">v6.4 — Intérprete local · Dictado gratis sin servidor</span>
+      <span style="color:var(--gold-dim)">v6.5 — Aviso de datos sin cifrar · Generador de frase</span>
     </div>
   </div>
 </div>
@@ -1731,6 +1745,7 @@ function renderToday(){
   document.getElementById('today-greet').textContent=greet+name+' 👋';
   document.getElementById('today-date').textContent=DAYNAMES[n.getDay()]+', '+n.getDate()+' de '+MONTHS[n.getMonth()].toLowerCase()+' '+n.getFullYear();
   renderMissed();
+  renderSyncBanner();
   renderSpeakUI();
   renderNotifBanner();
   // progreso
@@ -3289,6 +3304,42 @@ function disconnectGist(){
   document.getElementById('sync-indicator').style.display='none';
   renderSyncUI();toast('Sincronización desconectada');
 }
+// Aviso permanente en HOY mientras los datos viajen legibles. No es alarmismo:
+// un Gist "secreto" no está protegido — cualquiera con el enlace lo abre.
+function renderSyncBanner(){
+  const el=document.getElementById('sync-banner');
+  if(!el)return;
+  if(!getToken()||!getGistId()||getSyncPass()){el.innerHTML='';return;}
+  el.innerHTML=`<div class="banner danger">
+    <span>🔓 <b>Tus datos están sin cifrar en GitHub.</b> Cualquiera con el enlace del Gist puede leer tus tareas, tu salud y tus objetivos.</span>
+    <button onclick="goPage('profile');setTimeout(()=>document.getElementById('gh-pass-up')?.scrollIntoView({behavior:'smooth',block:'center'}),250)">Cifrar</button>
+  </div>`;
+}
+
+// Frase larga y memorable: mucho más fácil de apuntar sin errores que una
+// cadena aleatoria, y con margen de sobra frente a un ataque por fuerza bruta.
+const PW=['ancla','arena','bosque','brisa','cabra','calma','campo','canela','cedro','cielo','cobre','coral',
+'cuervo','duna','espiga','estrella','faro','fresa','fuego','gaviota','hielo','hoja','jazmin','lago','lanza',
+'lienzo','lima','luna','malva','mango','marfil','menta','miel','montana','nieve','nube','olivo','onda','oro',
+'ostra','pampa','perla','pino','playa','pluma','pozo','puente','rama','remo','rio','roble','roca','rosa',
+'rubi','sabana','salto','selva','senda','sierra','sol','tejado','tierra','tigre','trigo','trueno','tulipan',
+'valle','vela','viento','vino','yedra','zafiro','zorro','abeja','aguila','alba','ambar','arco','aroma','avena',
+'bahia','barro','brote','bruma','cactus','cascada','cereza','cima','cristal','delta','eco','estanque','fauna',
+'flor','fuente','galaxia','grano','helecho','hierba','isla','junco'];
+function generarFrase(){
+  const n=PW.length;
+  const idx=crypto.getRandomValues(new Uint32Array(7));
+  // El sesgo del módulo sobre un rango de 2^32 es de ~2e-8: irrelevante aquí.
+  const pal=[...idx].map(v=>PW[v%n]);
+  const num=String(crypto.getRandomValues(new Uint32Array(1))[0]%100).padStart(2,'0');
+  const frase=pal.join(' ')+' '+num;
+  document.getElementById('gh-pass-up').value=frase;
+  document.getElementById('pass-words').textContent=frase;
+  document.getElementById('pass-gen').classList.add('on');
+  try{navigator.clipboard&&navigator.clipboard.writeText(frase);}catch{}
+  toast('Frase generada y copiada — apúntala antes de cifrar','success',4500);
+}
+
 // Migra una conexión existente en texto plano a cifrada.
 async function enableEncryption(){
   const pass=document.getElementById('gh-pass-up').value;
@@ -3299,7 +3350,8 @@ async function enableEncryption(){
   save(K.syncPass,pass);
   await pushToGist(false);
   document.getElementById('gh-pass-up').value='';
-  renderSyncUI();
+  document.getElementById('pass-gen').classList.remove('on');
+  renderSyncUI();renderSyncBanner();
   toast('🔒 Datos cifrados en el cloud','success',3500);
 }
 function updateLastSyncLabel(){
