@@ -975,20 +975,33 @@ select option{background:var(--bg2)}
       <label class="toggle"><input type="checkbox" id="vz-rem" onchange="saveVoice()"/><span class="toggle-slider"></span></label>
     </div>
     <div class="toggle-row">
-      <div style="flex:1"><div class="toggle-label">Velocidad</div></div>
-      <select id="vz-rate" style="width:120px" onchange="saveVoice()">
-        <option value="0.85">Pausada</option><option value="1" selected>Normal</option>
-        <option value="1.15">Ágil</option><option value="1.35">Rápida</option>
-      </select>
+      <div><div class="toggle-label">Preferir voz femenina</div><div class="toggle-sub">Reordena las voces disponibles</div></div>
+      <label class="toggle"><input type="checkbox" id="vz-fem" onchange="saveVoice()"/><span class="toggle-slider"></span></label>
     </div>
     <div class="toggle-row">
       <div style="flex:1"><div class="toggle-label">Voz</div><div class="toggle-sub" id="vz-count"></div></div>
-      <select id="vz-voice" style="width:140px" onchange="saveVoice()"></select>
+      <select id="vz-voice" style="width:150px" onchange="saveVoice();testVoice()"></select>
+    </div>
+    <div class="toggle-row">
+      <div style="flex:1"><div class="toggle-label">Velocidad</div></div>
+      <select id="vz-rate" style="width:120px" onchange="saveVoice()">
+        <option value="0.85">Pausada</option><option value="0.95">Serena</option>
+        <option value="1" selected>Normal</option><option value="1.15">Ágil</option>
+        <option value="1.35">Rápida</option>
+      </select>
+    </div>
+    <div class="toggle-row">
+      <div style="flex:1"><div class="toggle-label">Tono</div><div class="toggle-sub">Más grave suena más natural</div></div>
+      <select id="vz-pitch" style="width:120px" onchange="saveVoice()">
+        <option value="0.8">Grave</option><option value="0.9">Cálido</option>
+        <option value="1" selected>Neutro</option><option value="1.15">Claro</option>
+      </select>
     </div>
     <div class="sync-actions" style="margin-bottom:12px">
       <button class="btn-sm primary" onclick="testVoice()">Probar voz</button>
       <button class="btn-sm" onclick="stopSpeak()">Callar</button>
     </div>
+    <div class="info-card" id="vz-help"></div>
 
     <!-- NOTIFICACIONES -->
     <div class="sec-title" style="margin-bottom:10px">Notificaciones</div>
@@ -1149,7 +1162,7 @@ select option{background:var(--bg2)}
 
     <div style="text-align:center;margin-top:20px;font-size:11px;color:var(--tx2);letter-spacing:.07em">
       Desarrollado con Claude · Anthropic<br>
-      <span style="color:var(--gold-dim)">v6.1 — Voz · Briefing hablado · Recuperación de avisos · Diagnóstico</span>
+      <span style="color:var(--gold-dim)">v6.2 — Voz natural · Selección inteligente de voz</span>
     </div>
   </div>
 </div>
@@ -3280,7 +3293,36 @@ function renderPushUI(){
 // clave de API. Colega puede hablarte desde el primer minuto.
 let speaking=false,ttsPrimed=false,voiceList=[];
 function ttsOK(){return 'speechSynthesis' in window&&'SpeechSynthesisUtterance' in window;}
-function voiceCfg(){return Object.assign({on:true,brief:true,rem:true,rate:1,voiceURI:''},load(K.voice)||{});}
+function voiceCfg(){return Object.assign({on:true,brief:true,rem:true,rate:1,pitch:1,fem:true,voiceURI:''},load(K.voice)||{});}
+
+// Nombres de voces femeninas en español segun fabricante (Apple, Google,
+// Microsoft, Samsung). No hay API que exponga el genero: hay que reconocerlas.
+const VOZ_FEM=/m[oó]nica|paulina|marisol|esperanza|helena|laura|sabina|luc[ií]a|elvira|isabel|conchita|pen[eé]lope|carmen|catalina|camila|dalia|salom[eé]|ximena|paloma|ver[oó]nica|ang[eé]lica|female|mujer|femenin/i;
+// Marcadores de voz de alta calidad (neuronal o mejorada).
+const VOZ_HQ=/enhanced|premium|neural|natural|mejorad|siri|wavenet|studio|online/i;
+const VOZ_MASC=/jorge|diego|carlos|juan|pablo|enrique|male|hombre|masculin/i;
+
+// Ordena las voces de mejor a peor. Sin esto se cogia la primera de la
+// lista, que en casi todos los telefonos es la mas robotica.
+function voiceScore(v,preferFem){
+  let s=0;
+  const n=(v.name||'')+' '+(v.voiceURI||'');
+  if(VOZ_HQ.test(n))s+=100;              // neuronal / mejorada: el salto real
+  if(preferFem&&VOZ_FEM.test(n))s+=50;
+  if(preferFem&&VOZ_MASC.test(n))s-=30;
+  if(!preferFem&&VOZ_MASC.test(n))s+=40;
+  if(v.localService===false)s+=25;       // las remotas de Google suenan mejor
+  const l=(v.lang||'').toLowerCase();
+  if(l==='es-es')s+=12;else if(l.startsWith('es-'))s+=8;
+  if(v.default)s+=3;
+  return s;
+}
+function voiceQuality(v){
+  const n=(v.name||'')+' '+(v.voiceURI||'');
+  if(VOZ_HQ.test(n))return '★★★';
+  if(v.localService===false)return '★★';
+  return '★';
+}
 
 // iOS exige que la PRIMERA locución nazca de un gesto del usuario. Sin esto,
 // el briefing automático quedaría mudo para siempre en iPhone.
@@ -3296,9 +3338,12 @@ function primeTTS(){
 function loadVoices(){
   if(!ttsOK())return;
   const all=speechSynthesis.getVoices()||[];
-  voiceList=all.filter(v=>v.lang&&v.lang.toLowerCase().startsWith('es'));
-  if(!voiceList.length)voiceList=all.slice(0,12);
+  const es=all.filter(v=>v.lang&&v.lang.toLowerCase().startsWith('es'));
+  const fem=voiceCfg().fem;
+  voiceList=(es.length?es:all.slice(0,20)).slice()
+    .sort((a,b)=>voiceScore(b,fem)-voiceScore(a,fem));
   renderVoiceSelect();
+  renderVoiceHelp();
 }
 function pickVoice(uri){
   if(!voiceList.length)loadVoices();
@@ -3309,10 +3354,34 @@ function renderVoiceSelect(){
   if(!sel)return;
   const cur=voiceCfg().voiceURI;
   sel.innerHTML=voiceList.length
-    ? voiceList.map(v=>`<option value="${esc(v.voiceURI)}"${v.voiceURI===cur?' selected':''}>${esc(v.name.slice(0,28))}</option>`).join('')
+    ? voiceList.map(v=>`<option value="${esc(v.voiceURI)}"${v.voiceURI===cur?' selected':''}>${voiceQuality(v)} ${esc(v.name.slice(0,26))}</option>`).join('')
     : '<option value="">Sin voces disponibles</option>';
   const c=document.getElementById('vz-count');
-  if(c)c.textContent=voiceList.length?voiceList.length+' voces en español':'Ninguna voz instalada';
+  if(!c)return;
+  const hq=voiceList.filter(v=>voiceQuality(v)==='★★★').length;
+  c.textContent=voiceList.length
+    ? voiceList.length+' disponibles'+(hq?' · '+hq+' de alta calidad':' · ninguna de alta calidad')
+    : 'Ninguna voz instalada';
+}
+// Instrucciones exactas segun el telefono para instalar voces mejores.
+function renderVoiceHelp(){
+  const el=document.getElementById('vz-help');
+  if(!el)return;
+  const hq=voiceList.filter(v=>voiceQuality(v)==='★★★').length;
+  if(hq){
+    el.innerHTML=`<h4>Ya tienes voz de alta calidad</h4>
+      <p>Detecté <b style="color:var(--green)">${hq}</b> voz${hq===1?'':'es'} neuronal${hq===1?'':'es'} en tu teléfono. Elígela arriba (las marcadas con ★★★) — la diferencia es enorme.</p>`;
+    return;
+  }
+  el.innerHTML=isIOS()
+    ? `<h4>Cómo conseguir una voz mucho mejor</h4>
+       <p>Las voces que trae iOS de fábrica son las antiguas y robóticas. Las buenas <b style="color:var(--gold)">se descargan gratis</b> y aparecerán aquí automáticamente:</p>
+       <p style="margin-top:8px">Ajustes → Accesibilidad → <b>Contenido hablado</b> → Voces → Español → toca <b>Mónica</b> y descarga la versión <b>Mejorada</b> o <b>Premium</b>.</p>
+       <p style="margin-top:8px;color:var(--tx2)">Vuelve aquí y pulsa Revisar. Siri no se puede usar desde la web: Apple no lo permite a ninguna app.</p>`
+    : `<h4>Cómo conseguir una voz mucho mejor</h4>
+       <p>Tu teléfono solo tiene voces básicas. Las de Google son <b style="color:var(--gold)">gratis y muy superiores</b>:</p>
+       <p style="margin-top:8px">Ajustes → Accesibilidad → <b>Salida de texto a voz</b> → motor <b>Voz de Google</b> → engranaje → <b>Instalar datos de voz</b> → Español → descarga la de mayor calidad.</p>
+       <p style="margin-top:8px;color:var(--tx2)">Vuelve aquí y pulsa Revisar. Con datos activos, Chrome también ofrece voces remotas de Google, que suenan mejor todavía.</p>`;
 }
 function saveVoice(){
   const c=voiceCfg();
@@ -3320,8 +3389,13 @@ function saveVoice(){
   c.brief=document.getElementById('vz-brief').checked;
   c.rem=document.getElementById('vz-rem').checked;
   c.rate=parseFloat(document.getElementById('vz-rate').value)||1;
+  c.pitch=parseFloat(document.getElementById('vz-pitch').value)||1;
+  const antesFem=c.fem;
+  c.fem=document.getElementById('vz-fem').checked;
   c.voiceURI=document.getElementById('vz-voice').value||'';
   save(K.voice,c);
+  // Al cambiar la preferencia de genero hay que reordenar y reelegir.
+  if(antesFem!==c.fem){c.voiceURI='';save(K.voice,c);loadVoices();}
   primeTTS();
   if(!c.on)stopSpeak();
   toast('Ajustes de voz guardados','success',1300);
@@ -3333,8 +3407,11 @@ function renderVoiceSettings(){
   el.checked=!!c.on;
   document.getElementById('vz-brief').checked=!!c.brief;
   document.getElementById('vz-rem').checked=!!c.rem;
+  document.getElementById('vz-fem').checked=!!c.fem;
   document.getElementById('vz-rate').value=String(c.rate);
+  document.getElementById('vz-pitch').value=String(c.pitch);
   renderVoiceSelect();
+  renderVoiceHelp();
 }
 function testVoice(){
   primeTTS();
@@ -3342,7 +3419,9 @@ function testVoice(){
   if(!c.on){toast('Activa primero el interruptor de voz','error');return;}
   if(!ttsOK()){toast('Este navegador no tiene sintetizador de voz','error',3500);return;}
   const n=settings.name?', '+settings.name:'';
-  if(!speak('Hola'+n+'. Soy Colega. A partir de ahora te aviso yo.'))
+  // Frase de prueba con pausas, números y hora: revela la calidad real.
+  if(!speak('Hola'+n+'. Soy Colega, tu asistente. Son '+horaHablada(nowHM())+
+    ', y tienes '+tasks.filter(t=>!t.done).length+' tareas pendientes. Cuando quieras, te resumo el día.'))
     toast('No se pudo reproducir la voz','error');
 }
 
@@ -3404,11 +3483,22 @@ function briefingText(){
   if(rec.length)P.push('Mi recomendación: '+rec.join(', y ')+'.');
   return P.join(' ');
 }
+// "14:30" leido tal cual suena a maquina. Aqui se dice como lo diria alguien.
+const NUM=['cero','una','dos','tres','cuatro','cinco','seis','siete','ocho','nueve','diez','once','doce'];
 function horaHablada(hm){
   if(!hm)return '';
   const p=hm.split(':');
-  const h=parseInt(p[0]),m=parseInt(p[1]);
-  return m===0?h:(h+' '+m);
+  let h=parseInt(p[0]);const m=parseInt(p[1]);
+  if(isNaN(h)||isNaN(m))return hm;
+  const franja=h<6?' de la madrugada':h<12?' de la mañana':h<21?' de la tarde':' de la noche';
+  let h12=h%12;if(h12===0)h12=12;
+  const nom=NUM[h12]||h12;
+  const art=h12===1?'la ':'las ';
+  if(m===0)return art+nom+franja;
+  if(m===15)return art+nom+' y cuarto'+franja;
+  if(m===30)return art+nom+' y media'+franja;
+  if(m===45){let s=(h12%12)+1;return 'las '+(NUM[s]||s)+' menos cuarto'+franja;}
+  return art+nom+' y '+m+franja;
 }
 function toggleBriefing(){
   primeTTS();
@@ -3864,24 +3954,55 @@ function stopMic(){
   if(!chatBusy)chatState('Listo',false);
   if(recog){try{recog.stop()}catch{} recog=null;}
 }
+// Chrome corta cualquier locucion que pase de ~15 s. Trocear por frases lo
+// evita y ademas suena mas natural: cada frase respira por su cuenta.
+function speechChunks(text){
+  const t=String(text).replace(/\s+/g,' ').trim();
+  const parts=t.match(/[^.!?…]+[.!?…]*\s*/g)||[t];
+  const out=[];let cur='';
+  for(const p of parts){
+    if(cur&&(cur+p).length>170){out.push(cur.trim());cur=p;}
+    else cur+=p;
+  }
+  if(cur.trim())out.push(cur.trim());
+  return out.filter(Boolean);
+}
+let speakKeep=null;
 function speak(text,onEnd){
   if(!ttsOK()||!text)return false;
-  if(!voiceCfg().on)return false;
+  const cfg=voiceCfg();
+  if(!cfg.on)return false;
   try{
     stopSpeak();
-    const cfg=voiceCfg();
-    const u=new SpeechSynthesisUtterance(String(text).slice(0,1200));
-    u.lang='es-ES';u.rate=+cfg.rate||1;u.pitch=1;u.volume=1;
+    const chunks=speechChunks(text);
+    if(!chunks.length)return false;
     const v=pickVoice(cfg.voiceURI);
-    if(v){u.voice=v;u.lang=v.lang;}
-    u.onstart=()=>{speaking=true;renderSpeakUI();};
-    u.onend=()=>{speaking=false;renderSpeakUI();if(onEnd)onEnd();};
-    u.onerror=()=>{speaking=false;renderSpeakUI();};
-    speechSynthesis.speak(u);
+    let left=chunks.length;
+    speaking=true;renderSpeakUI();
+    chunks.forEach((c,i)=>{
+      const u=new SpeechSynthesisUtterance(c);
+      u.rate=+cfg.rate||1;u.pitch=+cfg.pitch||1;u.volume=1;
+      u.lang=(v&&v.lang)||'es-ES';
+      if(v)u.voice=v;
+      u.onend=()=>{
+        if(--left<=0){speaking=false;renderSpeakUI();clearInterval(speakKeep);if(onEnd)onEnd();}
+      };
+      u.onerror=()=>{
+        if(--left<=0){speaking=false;renderSpeakUI();clearInterval(speakKeep);}
+      };
+      speechSynthesis.speak(u);
+    });
+    // Salvavidas para el bug de Chrome que suspende la cola en segundo plano.
+    clearInterval(speakKeep);
+    speakKeep=setInterval(()=>{
+      if(!speechSynthesis.speaking){clearInterval(speakKeep);return;}
+      try{speechSynthesis.resume();}catch{}
+    },8000);
     return true;
-  }catch(e){return false;}
+  }catch(e){speaking=false;renderSpeakUI();return false;}
 }
 function stopSpeak(){
+  clearInterval(speakKeep);
   try{if('speechSynthesis' in window)speechSynthesis.cancel();}catch{}
   speaking=false;renderSpeakUI();
 }
