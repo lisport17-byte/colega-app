@@ -103,6 +103,22 @@ const TOOLS = [
     }
   },
   {
+    name: 'crear_nota',
+    description: 'Guarda información suelta en la bandeja de notas. Úsala cuando el usuario quiere recordar algo que NO es una tarea con fecha: una compra, un tema que investigar, una idea, un dato o un contacto. Ante la duda entre tarea y nota: si tiene que hacerse en un momento concreto es tarea; si solo hay que no olvidarlo, es nota.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        texto: { type: 'string', description: 'La información, tal como la diría el usuario' },
+        tipo: {
+          type: 'string',
+          enum: ['idea', 'compra', 'investigar', 'contacto', 'info'],
+          description: 'compra = algo que comprar · investigar = mirar más adelante · contacto = personas y datos · idea = ocurrencia · info = cualquier otro dato'
+        }
+      },
+      required: ['texto']
+    }
+  },
+  {
     name: 'crear_tarjeta',
     description: 'Crea una tarjeta de repaso espaciado para algo que el usuario quiere memorizar.',
     input_schema: {
@@ -128,10 +144,13 @@ CONTEXTO ACTUAL (real, de su teléfono):
 - Objetivos activos: ${snapshot.objetivos?.length ? snapshot.objetivos.join(' | ') : 'ninguno'}
 - Hoy: ${snapshot.focoMin || 0} min de foco, ${snapshot.medMin || 0} min de meditación, ${snapshot.ejMin || 0} min de ejercicio
 - Racha: ${snapshot.racha || 0} días · tarjetas por repasar: ${snapshot.repasos || 0}
+- Notas sin revisar en la bandeja: ${snapshot.notasPendientes || 0}
 
 CÓMO TRABAJAS:
 - Responde breve. Dos o tres frases salvo que te pidan profundidad. Nada de introducciones ni de repetir la pregunta.
 - Cuando el usuario menciona algo que debe hacer, recordar o lograr, usa la herramienta correspondiente en lugar de solo describirlo. Las acciones que propones no se ejecutan solas: él las confirma en pantalla.
+- Puedes usar varias herramientas en un mismo turno. Si te dicta tres cosas seguidas, crea las tres.
+- Distingue tarea de nota: si algo debe hacerse a una hora concreta es tarea o evento; si solo hay que no olvidarlo (una compra, un tema que mirar, un dato), es nota. No conviertas en tarea con fecha inventada algo que el usuario solo quería apuntar.
 - Deduce fechas y horas relativas ("mañana", "el viernes", "en dos semanas") a partir de la fecha actual y escríbelas ya resueltas.
 - Una tarea sin hora no genera recordatorio. Si el usuario no la dice y la tarea la necesita, elige una hora sensata y menciónala en tu respuesta.
 - Al crear un objetivo, propón siempre hitos verificables. "Ponerme en forma" no se puede marcar como hecho; "correr 5 km sin parar" sí.
