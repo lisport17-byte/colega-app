@@ -70,9 +70,28 @@ async function sendPush(subscription, env) {
 }
 
 // ── Rutas ────────────────────────────────────────────────────────────
+/**
+ * TODOS los dispositivos viven en UNA sola clave KV.
+ *
+ * El diseño anterior usaba env.COLEGA.list() en cada ejecución del cron.
+ * El plan gratuito de Cloudflare permite 1.000 operaciones LIST al día y el
+ * cron corre 1.440 veces: la cuota se agotaba a las 16 h y el resto del día
+ * no llegaba ningún aviso. Con una sola clave son lecturas (100.000/día),
+ * así que el uso real queda en el 1,4 % del límite.
+ */
+const KEY = 'subs';
+const MAX_DEVICES = 10;
+
+async function readSubs(env) {
+  const raw = await env.COLEGA.get(KEY);
+  if (!raw) return {};
+  try { return JSON.parse(raw) || {}; } catch { return {}; }
+}
+const writeSubs = (env, subs) =>
+  env.COLEGA.put(KEY, JSON.stringify(subs), { expirationTtl: 90 * 86400 });
+
 async function handleRegister(request, env) {
-  const body = await request.json();
-  const { clientId, subscription, times } = body;
+  const { clientId, subscription, times } = await request.json();
 
   if (!clientId || !/^[A-Za-z0-9_-]{8,64}$/.test(clientId))
     return json({ error: 'clientId inválido' }, 400);
@@ -87,63 +106,74 @@ async function handleRegister(request, env) {
     .sort((a, b) => a - b)
     .slice(0, 300);
 
-  await env.COLEGA.put(
-    'sub:' + clientId,
-    JSON.stringify({ subscription, times: clean, sent: [], updated: now }),
-    { expirationTtl: 60 * 86400 }
-  );
-  return json({ ok: true, scheduled: clean.length });
+  const subs = await readSubs(env);
+  const previo = subs[clientId];
+  subs[clientId] = {
+    subscription,
+    times: clean,
+    sent: (previo && previo.sent) || [],
+    updated: now
+  };
+
+  // Poda de dispositivos abandonados para que la clave no crezca sin fin.
+  const ids = Object.keys(subs);
+  if (ids.length > MAX_DEVICES) {
+    ids.sort((a, b) => (subs[b].updated || 0) - (subs[a].updated || 0))
+       .slice(MAX_DEVICES)
+       .forEach(id => delete subs[id]);
+  }
+
+  await writeSubs(env, subs);
+  return json({ ok: true, scheduled: clean.length, dispositivos: Object.keys(subs).length });
 }
 
 async function handleUnregister(request, env) {
   const { clientId } = await request.json();
   if (!clientId) return json({ error: 'clientId requerido' }, 400);
-  await env.COLEGA.delete('sub:' + clientId);
+  const subs = await readSubs(env);
+  if (subs[clientId]) { delete subs[clientId]; await writeSubs(env, subs); }
   return json({ ok: true });
 }
 
 async function handleTest(request, env) {
   const { clientId } = await request.json();
-  const raw = await env.COLEGA.get('sub:' + clientId);
-  if (!raw) return json({ error: 'No registrado' }, 404);
-  const rec = JSON.parse(raw);
+  const subs = await readSubs(env);
+  const rec = subs[clientId];
+  if (!rec) return json({ error: 'Este dispositivo no está registrado' }, 404);
   const status = await sendPush(rec.subscription, env);
   return json({ ok: status >= 200 && status < 300, status });
 }
 
 // ── Cron: cada minuto revisa quién tiene un aviso vencido ────────────
+// Una lectura por minuto. Solo escribe cuando algo vence de verdad, así el
+// límite de 1.000 escrituras diarias del plan gratuito ni se roza.
 async function tick(env) {
   const now = Date.now();
-  const list = await env.COLEGA.list({ prefix: 'sub:' });
+  const subs = await readSubs(env);
+  let cambios = false;
 
-  for (const k of list.keys) {
-    const raw = await env.COLEGA.get(k.name);
-    if (!raw) continue;
-    const rec = JSON.parse(raw);
+  for (const id of Object.keys(subs)) {
+    const rec = subs[id];
+    if (!rec || !rec.subscription) { delete subs[id]; cambios = true; continue; }
+
     const sent = new Set(rec.sent || []);
-
     // Vencidos en los últimos 5 min y aún no enviados.
     const due = (rec.times || []).filter(t => t <= now && t > now - 300000 && !sent.has(t));
     if (!due.length) continue;
 
     let status = 0;
-    try {
-      status = await sendPush(rec.subscription, env);
-    } catch (e) {
-      status = 0;
-    }
+    try { status = await sendPush(rec.subscription, env); } catch (e) { status = 0; }
 
     // 404/410 = suscripción muerta (app desinstalada): se limpia.
-    if (status === 404 || status === 410) {
-      await env.COLEGA.delete(k.name);
-      continue;
-    }
+    if (status === 404 || status === 410) { delete subs[id]; cambios = true; continue; }
 
     due.forEach(t => sent.add(t));
     rec.sent = [...sent].filter(t => t > now - 86400000);
     rec.times = (rec.times || []).filter(t => t > now - 86400000);
-    await env.COLEGA.put(k.name, JSON.stringify(rec), { expirationTtl: 60 * 86400 });
+    cambios = true;
   }
+
+  if (cambios) await writeSubs(env, subs);
 }
 
 export default {

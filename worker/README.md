@@ -183,8 +183,42 @@ En Android funciona tanto instalada como desde Chrome.
 | `/test` | POST | Forzar un push inmediato |
 | `/chat` | POST | Conversación con Claude (requiere `X-Colega-Key`) |
 
-## Costes
+## Costes reales
 
-Plan free de Cloudflare Workers: 100.000 peticiones/día y cron triggers
-incluidos. Un uso personal consume del orden de 1.500 invocaciones de cron al
-día. No deberías pagar nada.
+### Cloudflare — gratis, con margen de sobra
+
+| Recurso | Tu consumo real | Límite gratuito | Uso |
+|---|---|---|---|
+| Peticiones Worker | ~1.500/día (el cron) | 100.000/día | 1,5 % |
+| Lecturas KV | 1.440/día (una por minuto) | 100.000/día | 1,4 % |
+| Escrituras KV | unas pocas al día | 1.000/día | <5 % |
+| Cron Triggers | 1 cada minuto | incluidos | — |
+
+> **Nota de diseño:** la primera versión usaba `KV.list()` en cada ejecución del
+> cron. El plan gratuito permite **1.000 operaciones LIST al día** y el cron corre
+> **1.440 veces**, así que la cuota se agotaba a las 16 horas y el resto del día
+> no llegaba ningún aviso. Ahora todos los dispositivos viven en **una sola
+> clave**, que se lee con `get()` — y las lecturas tienen 100.000 diarias.
+
+### Anthropic — esto sí se paga
+
+El asistente conversacional usa tu propia clave de API. No hay plan gratuito:
+se carga saldo por adelantado (el mínimo suele ser 5 USD).
+
+Coste aproximado por intercambio con `claude-opus-5`:
+
+| Concepto | Tokens | Coste |
+|---|---|---|
+| Entrada (prompt + tu contexto + historial) | ~2.000 | ~0,01 USD |
+| Salida (respuesta + acciones) | ~400 | ~0,01 USD |
+| **Total por mensaje** | | **~0,02 USD** |
+
+Es decir: **10 mensajes al día ≈ 6 USD al mes**. Si te parece mucho, en
+`src/chat.js` puedes cambiar `model: 'claude-opus-5'` por `'claude-sonnet-5'`
+y baja bastante, a cambio de algo de criterio en las respuestas.
+
+**Pon un límite de gasto en la consola de Anthropic** (Settings → Limits) antes
+de empezar. Es tu clave y tu factura.
+
+> El push **no consume nada de Anthropic**: son dos cosas independientes. Puedes
+> desplegar solo la Fase 3 y dejar el asistente para más adelante.
