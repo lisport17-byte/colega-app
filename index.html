@@ -970,7 +970,7 @@ select option{background:var(--bg2)}
       <div id="ai-setup">
         <div class="form-row">
           <label>URL de tu Worker</label>
-          <input id="ai-url" placeholder="https://colega-push.tu-cuenta.workers.dev"/>
+          <input id="ai-url" placeholder="https://tu-servidor/..."/>
         </div>
         <div class="form-row">
           <label>Clave de acceso (APP_SECRET)</label>
@@ -1142,9 +1142,10 @@ select option{background:var(--bg2)}
       <div id="push-setup">
         <div class="form-row">
           <label>URL de tu Worker</label>
-          <input id="push-url" placeholder="https://colega-push.tu-cuenta.workers.dev"/>
+          <input id="push-url" placeholder="https://....supabase.co/functions/v1/colega-push"/>
           <div style="font-size:11px;color:var(--tx2);margin-top:5px;line-height:1.5">
-            Instrucciones de despliegue en <b style="color:var(--gold)">worker/README.md</b>. Tarda unos 10 minutos y es gratis.
+            Pega aquí la URL de tu servidor de recordatorios. Sirve tanto Supabase como Cloudflare —
+            ambos son gratuitos y hablan el mismo protocolo.
           </div>
         </div>
         <div class="sync-actions"><button class="btn-sm primary" onclick="connectPush()">Conectar</button></div>
@@ -1251,7 +1252,7 @@ select option{background:var(--bg2)}
 
     <div style="text-align:center;margin-top:20px;font-size:11px;color:var(--tx2);letter-spacing:.07em">
       Desarrollado con Claude · Anthropic<br>
-      <span style="color:var(--gold-dim)">v6.6 — Calendario válido RFC 5545 · Compartir a Google Calendar</span>
+      <span style="color:var(--gold-dim)">v6.7 — Avisos con la app cerrada (Supabase)</span>
     </div>
   </div>
 </div>
